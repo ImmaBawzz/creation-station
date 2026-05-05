@@ -375,7 +375,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               </div>
 
-              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(150px,190px)]">
+              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(150px,190px)_auto]">
                 <input
                   name="q"
                   defaultValue={searchQuery}
@@ -394,9 +394,9 @@ export default async function Home({ searchParams }: HomeProps) {
                   ))}
                 </select>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-end lg:col-span-2">
-                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-24">
-                    Apply
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row lg:justify-end">
+                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-28">
+                    Apply Filters
                   </button>
                   <Link
                     href="/"
@@ -672,6 +672,10 @@ export default async function Home({ searchParams }: HomeProps) {
                         ? taskGroupSections.map((section) => {
                             const sectionTasks = groupedTodoTasks[section.title];
 
+                            if (sectionTasks.length === 0) {
+                              return null;
+                            }
+
                             return (
                               <details
                                 key={section.title}
@@ -690,15 +694,9 @@ export default async function Home({ searchParams }: HomeProps) {
                                   </span>
                                 </summary>
                                 <div className="space-y-3 border-t border-zinc-800 p-3">
-                                  {sectionTasks.length > 0 ? (
-                                    sectionTasks.map((task) => (
-                                      <TaskCard key={task.id} task={task} />
-                                    ))
-                                  ) : (
-                                    <p className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950/70 p-3 text-xs text-zinc-500">
-                                      No tasks in this group.
-                                    </p>
-                                  )}
+                                  {sectionTasks.map((task) => (
+                                    <TaskCard key={task.id} task={task} />
+                                  ))}
                                 </div>
                               </details>
                             );
