@@ -1,50 +1,116 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Creation Station — Workspace Agent Instructions
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+You are working inside the Creation Station codebase.
 
-# Creation Station Workflow Rules
+## Mission
 
-## Source Of Truth
+Stabilize the existing v0.5 core workflow only:
 
-1. Read `ROADMAP.md` before choosing what to do next.
-2. Treat `ROADMAP.md` as the source of truth for staged progress.
-3. Use `WORKFLOW.md` for the implementation checklist and closeout format.
-4. Use session memory for temporary in-flight context only, not for long-term sequencing.
+Idea → AI Factory Plan → Review → Revision → Approval → Tasks
 
-## Default Continuation Rule
+The current system already has:
+- Next.js app structure
+- SQLite/Prisma data layer
+- Local Ollama AI Factory Planner
+- Factory prompt module
+- Review Inbox
+- Revision/re-plan loop
+- Dynamic task generation from plan.nextActions
 
-1. Continue to the next best roadmap step automatically when the current one is complete, adjacent, and unblocked.
-2. Do not wait for repeated user nudges when the next local step is already clear.
-3. Validate the current slice before moving to the next roadmap step.
-4. Stop continuation only for blockers, destructive risk, unresolved product ambiguity, or explicit user redirect.
+Your job is not to expand the platform. Your job is to polish the current core until it is reliable, readable, and safe.
 
-## Current Roadmap Position
+## Hard Scope Lock
 
-- Current completed milestone: `v0.5`
-- Current active milestone: `v0.6`
-- Current next best step: model required assets more clearly and surface them alongside plans and tasks.
+Do not add:
+- Agent meetings
+- External connectors
+- Asset vault as a major new module
+- Plugin system
+- ComfyUI integration
+- VSCode automation integration
+- Calendar/team systems
+- Marketplace
+- New large database models
+- Authentication
+- Cloud sync
+- Payments
+- Deployment infrastructure
 
-## Closeout Requirement
+## Allowed Work
 
-Every implementation closeout should include:
+You may:
+- Improve status labels and UI badges
+- Improve empty states
+- Improve error messages
+- Improve review/revision clarity
+- Improve task board clarity
+- Add small helper functions
+- Add lightweight docs
+- Fix TypeScript errors
+- Fix Prisma issues
+- Fix broken imports
+- Fix broken server actions
+- Run tests/checks
+- Commit small coherent changes
 
-1. What changed
-2. What was verified
-3. What remains blocked, if anything
-4. A short reminder block with:
-	- `Next Best Step:`
-	- `Why This Is Next:`
-	- `Resume Trigger:`
+## Engineering Rules
 
-## Reminder Rule
+1. Make small changes.
+2. Keep each change reversible.
+3. Do not rewrite the app architecture.
+4. Do not remove working functionality.
+5. Preserve the current data model unless absolutely required.
+6. If a database change is unavoidable, explain it first in `docs/CHANGELOG.md`.
+7. Keep Server Actions server-side.
+8. Keep the AI provider isolated in `src/lib/aiProvider.ts`.
+9. Keep prompt construction isolated in `src/lib/factoryPrompt.ts`.
+10. Prefer helper files over duplicating UI logic.
 
-Always end implementation by naming the next best adjacent roadmap step so future work naturally continues from the correct place.
+## Required Validation After Every Change
 
-## Repo-Specific Guardrails
+Run:
 
-1. Keep changes aligned to the current roadmap milestone unless validation or user input changes the path.
-2. Prefer small validated slices over broad speculative expansion.
-3. If roadmap and reality diverge, update the roadmap instead of silently drifting away from it.
-4. When working on Next.js behavior, follow the warning above and check the local Next.js docs when needed.
+```powershell
+npm run lint
+npx tsc --noEmit
+npx prisma generate
+npm run dev
+```
+
+Then manually verify:
+1. Create idea.
+2. Send idea to AI Factory.
+3. Plan appears in Review Inbox.
+4. Request revision with notes.
+5. Re-plan with feedback.
+6. Approve plan.
+7. Tasks appear on board.
+
+If any check fails, fix before continuing.
+
+## Commit Discipline
+
+Commit after each stable unit:
+
+```powershell
+git add .
+git commit -m "Clear message describing one change"
+```
+
+Suggested commit style:
+- `Polish status labels`
+- `Improve empty states`
+- `Clarify revision flow`
+- `Add stability docs`
+- `Fix task board display`
+
+## Stop Conditions
+
+Stop immediately if:
+- The app no longer starts.
+- Prisma schema and database drift become unclear.
+- More than 5 files need changes for one task.
+- A requested improvement requires a new subsystem.
+- You are about to modify unrelated files.
+
+When stopped, write a short report in `docs/AGENT_RUN_REPORT.md`.
