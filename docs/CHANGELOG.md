@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.8 — Dashboard Overview
+
+### Added
+
+- Dashboard page with total ideas, ideas by status, plans waiting review, and tasks by status.
+- Recent activity panels for ideas, approved plans, and tasks.
+- Dashboard navigation from the existing Inbox and Factory Planner sidebars.
+
+### Not Added
+
+- Schema changes
+- New dependencies
+- Chart libraries
+- Authentication
+- Teams
+- Connectors
+- Plugin systems
+- Asset vault
+
 ## v0.7 — Search, Filter, and Archive
 
 ### Added

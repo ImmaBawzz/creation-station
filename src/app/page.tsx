@@ -166,6 +166,12 @@ export default async function Home({ searchParams }: HomeProps) {
 
           <nav className="mt-8 space-y-2 text-sm">
             <Link
+              href="/dashboard"
+              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
+            >
+              📊 Dashboard
+            </Link>
+            <Link
               href="/"
               className="block rounded-2xl bg-zinc-800 px-4 py-3"
             >

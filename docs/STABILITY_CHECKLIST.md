@@ -31,3 +31,4 @@
 - [x] Add export backup
 - [x] Improve lightweight asset visibility
 - [x] Add search, filter, and archived view
+- [x] Add dashboard overview
