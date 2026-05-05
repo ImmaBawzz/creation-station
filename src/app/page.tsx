@@ -135,9 +135,15 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const reviewPlans = await db.factoryPlan.findMany({
     where: {
-      status: {
-        in: ["REVIEW_PENDING", "REVISION_REQUESTED"],
-      },
+      OR: [
+        { status: "REVIEW_PENDING" },
+        {
+          status: "REVISION_REQUESTED",
+          idea: {
+            status: "NEEDS_REVISION",
+          },
+        },
+      ],
     },
     orderBy: { createdAt: "desc" },
     include: {
