@@ -183,6 +183,12 @@ export default async function Home({ searchParams }: HomeProps) {
             >
               🏭 Factory Planner
             </Link>
+            <Link
+              href="/settings"
+              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
+            >
+              ⚙️ Settings
+            </Link>
             <div className="rounded-2xl px-4 py-3 text-zinc-400">🔍 Review</div>
             <div className="rounded-2xl px-4 py-3 text-zinc-400">✅ Tasks</div>
             <div className="rounded-2xl px-4 py-3 text-zinc-400">📦 Assets</div>

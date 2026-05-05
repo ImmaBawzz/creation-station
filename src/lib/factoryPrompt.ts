@@ -13,6 +13,10 @@ export type FactoryPlannerIdeaInput = {
     nextActions: string;
     revisionNotes: string;
   } | null;
+  promptPresets?: {
+    factory?: string;
+    revision?: string;
+  };
 };
 
 export type FactoryPlannerResult = {
@@ -44,6 +48,14 @@ export function buildFactoryPrompt(idea: FactoryPlannerIdeaInput): string {
     `Potential: ${idea.potential}`,
   ];
 
+  if (idea.promptPresets?.factory) {
+    lines.push(
+      "",
+      "User's saved Factory planning preference:",
+      idea.promptPresets.factory,
+    );
+  }
+
   if (idea.priorPlan) {
     lines.push(
       "",
@@ -60,6 +72,14 @@ export function buildFactoryPrompt(idea: FactoryPlannerIdeaInput): string {
       "",
       "Produce a meaningfully improved plan based on this feedback.",
     );
+
+    if (idea.promptPresets?.revision) {
+      lines.push(
+        "",
+        "User's saved revision preference:",
+        idea.promptPresets.revision,
+      );
+    }
   }
 
   lines.push(

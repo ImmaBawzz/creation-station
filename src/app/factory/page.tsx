@@ -61,6 +61,12 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
               >
                 📥 Back to Inbox
               </Link>
+              <Link
+                href="/settings"
+                className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
+              >
+                ⚙️ Settings
+              </Link>
               <div className="rounded-2xl bg-zinc-800 px-4 py-3">🏭 Factory Planner</div>
             </nav>
 

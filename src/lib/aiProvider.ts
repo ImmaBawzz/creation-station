@@ -12,6 +12,22 @@ type OllamaGenerateResponse = {
   error?: string;
 };
 
+export type AiProviderStatus = {
+  provider: string;
+  supported: boolean;
+  baseUrl: string;
+  model: string;
+  hasModel: boolean;
+  hasBaseUrl: boolean;
+  environmentReady: boolean;
+  message: string;
+};
+
+export type AiConnectionTestResult = {
+  ok: boolean;
+  message: string;
+};
+
 function compactErrorText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -76,6 +92,94 @@ function getOllamaConfig() {
   }
 
   return { baseUrl, model };
+}
+
+export function getAiProviderStatus(): AiProviderStatus {
+  const provider = process.env.AI_PROVIDER ?? "ollama";
+  const baseUrl = process.env.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434";
+  const model = process.env.OLLAMA_MODEL?.trim() ?? "";
+  const supported = provider === "ollama";
+  const hasBaseUrl = Boolean(baseUrl.trim());
+  const hasModel = Boolean(model);
+  const environmentReady = supported && hasBaseUrl && hasModel;
+
+  let message = "AI Factory is configured for local Ollama.";
+
+  if (!supported) {
+    message = `Unsupported AI provider "${provider}". Set AI_PROVIDER=ollama in .env.local.`;
+  } else if (!hasModel) {
+    message = "Missing OLLAMA_MODEL. Add OLLAMA_MODEL to .env.local before using the Factory Planner.";
+  } else if (!hasBaseUrl) {
+    message = "Missing OLLAMA_BASE_URL. Set it to the local Ollama server root.";
+  }
+
+  return {
+    provider,
+    supported,
+    baseUrl,
+    model: model || "Not set",
+    hasModel,
+    hasBaseUrl,
+    environmentReady,
+    message,
+  };
+}
+
+export async function testAiProviderConnection(): Promise<AiConnectionTestResult> {
+  const status = getAiProviderStatus();
+
+  if (!status.environmentReady) {
+    return {
+      ok: false,
+      message: status.message,
+    };
+  }
+
+  try {
+    const response = await fetch(`${status.baseUrl}/api/tags`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const errorText = (await response.text()).trim();
+
+      return {
+        ok: false,
+        message: explainHttpFailure(
+          response.status,
+          errorText,
+          status.model,
+          status.baseUrl,
+        ),
+      };
+    }
+
+    const payload = (await response.json()) as {
+      models?: Array<{ name?: string; model?: string }>;
+    };
+    const models = payload.models ?? [];
+    const modelExists = models.some(
+      (model) => model.name === status.model || model.model === status.model,
+    );
+
+    if (!modelExists) {
+      return {
+        ok: false,
+        message: modelMissingMessage(status.model),
+      };
+    }
+
+    return {
+      ok: true,
+      message: `Ollama is reachable and model "${status.model}" is installed.`,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: `Could not reach Ollama at ${status.baseUrl}. Start Ollama, then confirm OLLAMA_BASE_URL in .env.local points to the server root.`,
+    };
+  }
 }
 
 function requireText(value: unknown, field: keyof FactoryPlannerResult): string {

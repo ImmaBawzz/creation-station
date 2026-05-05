@@ -2,6 +2,7 @@
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { db } from "@/lib/db";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -28,6 +29,17 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Something went wrong while making the AI plan. Please try again.";
+}
+
+async function getPromptPresetCookie(name: string): Promise<string> {
+  const cookieStore = await cookies();
+  const value = cookieStore.get(name)?.value.trim() ?? "";
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 export async function createIdea(formData: FormData) {
@@ -82,6 +94,10 @@ export async function sendToFactory(formData: FormData) {
       tags: idea.tags,
       priority: idea.priority,
       potential: idea.potential,
+      promptPresets: {
+        factory: await getPromptPresetCookie("creation_station_factory_preset"),
+        revision: await getPromptPresetCookie("creation_station_revision_preset"),
+      },
       priorPlan: priorRevision
         ? {
             summary: priorRevision.summary,

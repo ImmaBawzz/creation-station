@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.9 — Settings and AI Controls
+
+### Added
+
+- Settings route for local AI provider diagnostics.
+- Current AI provider, Ollama model, base URL, and environment readiness display.
+- Server-side AI connection test for local Ollama and the configured model.
+- AI health messaging for setup and connection failures.
+- Browser-local editable prompt presets used by Factory planning and revision prompts.
+
+### Not Added
+
+- Authentication
+- Cloud accounts
+- Team features
+- Schema changes
+- External connectors
+- Plugin systems
+- Asset vault
+
 ## v0.8 — Dashboard Overview
 
 ### Added
