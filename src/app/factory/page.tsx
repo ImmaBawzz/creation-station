@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { db } from "@/lib/db";
+import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import { sendToFactory } from "../actions";
 
 type FactoryPageProps = {
@@ -123,12 +124,17 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h3 className="font-semibold">{idea.title}</h3>
-                            <p className="mt-1 text-xs text-zinc-500">
-                              {idea.category} · {idea.status}
-                            </p>
+                            <p className="mt-1 text-xs text-zinc-500">{idea.category}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <span
+                                className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(idea.status)}`}
+                              >
+                                {statusLabel(idea.status)}
+                              </span>
+                            </div>
                           </div>
-                          <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
-                            {idea.potential}
+                          <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium text-fuchsia-200">
+                            {potentialLabel(idea.potential)}
                           </span>
                         </div>
 
@@ -187,10 +193,19 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                       key={plan.id}
                       className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
                     >
-                      <h3 className="font-semibold">{plan.title}</h3>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        From idea: {plan.idea.title}
-                      </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">{plan.title}</h3>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            From idea: {plan.idea.title}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(plan.status)}`}
+                        >
+                          {statusLabel(plan.status)}
+                        </span>
+                      </div>
 
                       <div className="mt-4 space-y-3 text-sm">
                         <section className="rounded-2xl bg-zinc-900 p-3">

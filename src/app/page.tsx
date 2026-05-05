@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import {
   approvePlan,
   archiveIdea,
@@ -182,12 +183,17 @@ export default async function Home({ searchParams }: HomeProps) {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="font-semibold">{idea.title}</h3>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {idea.category} · {idea.status}
-                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">{idea.category}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(idea.status)}`}
+                          >
+                            {statusLabel(idea.status)}
+                          </span>
+                        </div>
                       </div>
-                      <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs">
-                        {idea.potential}
+                      <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium text-fuchsia-200">
+                        {potentialLabel(idea.potential)}
                       </span>
                     </div>
 
@@ -221,14 +227,18 @@ export default async function Home({ searchParams }: HomeProps) {
                       )}
 
                       {idea.status === "PLAN_READY" && (
-                        <span className="rounded-xl bg-blue-500/20 px-3 py-2 text-xs font-medium text-blue-300">
-                          Plan in Review
+                        <span
+                          className={`rounded-xl border px-3 py-2 text-xs font-medium ${statusBadgeClass(idea.status)}`}
+                        >
+                          {statusLabel(idea.status)}
                         </span>
                       )}
 
                       {idea.status === "TASKED" && (
-                        <span className="rounded-xl bg-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-300">
-                          Tasks Created
+                        <span
+                          className={`rounded-xl border px-3 py-2 text-xs font-medium ${statusBadgeClass(idea.status)}`}
+                        >
+                          {statusLabel(idea.status)}
                         </span>
                       )}
 
@@ -264,13 +274,9 @@ export default async function Home({ searchParams }: HomeProps) {
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-semibold">{plan.title}</h3>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          plan.status === "REVISION_REQUESTED"
-                            ? "bg-orange-500/20 text-orange-300"
-                            : "bg-blue-500/20 text-blue-300"
-                        }`}
+                        className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(plan.status)}`}
                       >
-                        {plan.status === "REVISION_REQUESTED" ? "Needs Revision" : "Awaiting Review"}
+                        {statusLabel(plan.status)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">
@@ -363,7 +369,16 @@ export default async function Home({ searchParams }: HomeProps) {
                   key={status}
                   className="min-h-48 rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
                 >
-                  <h3 className="font-semibold">{status}</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="font-semibold">{statusLabel(status)}</h3>
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(status)}`}
+                    >
+                      {
+                        tasks.filter((task) => task.status === status).length
+                      }
+                    </span>
+                  </div>
 
                   <div className="mt-4 space-y-3">
                     {tasks
