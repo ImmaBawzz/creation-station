@@ -45,6 +45,31 @@ const taskEmptyStateCopy: Record<string, string> = {
   DONE: "Completed tasks will collect here once work starts moving through the board.",
 };
 
+const taskGroupSections = [
+  { title: "Intake / New", defaultOpen: true },
+  { title: "Validation", defaultOpen: true },
+  { title: "Planning", defaultOpen: true },
+  { title: "Build", defaultOpen: false },
+  { title: "Assets Needed", defaultOpen: false },
+  { title: "Release Prep", defaultOpen: false },
+  { title: "Other", defaultOpen: false },
+] as const;
+
+type TaskGroupTitle = (typeof taskGroupSections)[number]["title"];
+
+type BoardTask = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  plan: {
+    requiredAssets: string;
+    idea: {
+      title: string;
+    };
+  };
+};
+
 function cleanSearchParam(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -78,6 +103,84 @@ function buildInboxHref({
 
   const query = params.toString();
   return query ? `/?${query}` : "/";
+}
+
+function textIncludesAny(value: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function getTaskGroup(task: BoardTask): TaskGroupTitle {
+  const searchableText = `${task.title} ${task.description}`.toLowerCase();
+
+  if (textIncludesAny(searchableText, ["capture", "idea", "raw"])) {
+    return "Intake / New";
+  }
+
+  if (textIncludesAny(searchableText, ["test", "validate", "feedback", "mvp"])) {
+    return "Validation";
+  }
+
+  if (textIncludesAny(searchableText, ["brief", "plan", "scope", "define"])) {
+    return "Planning";
+  }
+
+  if (textIncludesAny(searchableText, ["build", "create", "implement", "prototype"])) {
+    return "Build";
+  }
+
+  if (textIncludesAny(searchableText, ["asset", "reference", "template", "notes"])) {
+    return "Assets Needed";
+  }
+
+  if (textIncludesAny(searchableText, ["release", "checklist", "polish", "v1"])) {
+    return "Release Prep";
+  }
+
+  return "Other";
+}
+
+function groupTasksBySection(tasks: BoardTask[]): Record<TaskGroupTitle, BoardTask[]> {
+  const groupedTasks = taskGroupSections.reduce(
+    (groups, section) => ({
+      ...groups,
+      [section.title]: [],
+    }),
+    {} as Record<TaskGroupTitle, BoardTask[]>,
+  );
+
+  for (const task of tasks) {
+    groupedTasks[getTaskGroup(task)].push(task);
+  }
+
+  return groupedTasks;
+}
+
+function TaskCard({ task }: { task: BoardTask }) {
+  const requiredAssets = assetLines(task.plan.requiredAssets);
+  const previewAssets = requiredAssets.slice(0, 2);
+
+  return (
+    <div className="rounded-xl bg-zinc-900 p-3 text-sm">
+      <p className="font-medium">{task.title}</p>
+      <p className="mt-1 text-xs text-zinc-500">{task.plan.idea.title}</p>
+      {task.description && (
+        <p className="mt-2 text-xs leading-relaxed text-zinc-400">{task.description}</p>
+      )}
+      {requiredAssets.length > 0 && (
+        <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-2 text-xs">
+          <p className="font-medium text-cyan-100">
+            {assetCountLabel(requiredAssets.length)}
+          </p>
+          <p className="mt-1 text-zinc-400">
+            {previewAssets.join(" | ")}
+            {requiredAssets.length > previewAssets.length
+              ? ` +${requiredAssets.length - previewAssets.length} more`
+              : ""}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default async function Home({ searchParams }: HomeProps) {
@@ -272,17 +375,17 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               </div>
 
-              <form className="mt-5 grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-[1fr_180px_auto_auto]">
+              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(150px,190px)]">
                 <input
                   name="q"
                   defaultValue={searchQuery}
                   placeholder="Search title, raw text, tags, or summary"
-                  className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
                 />
                 <select
                   name="status"
                   defaultValue={selectedStatus}
-                  className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
                 >
                   {ideaStatusFilters.map((status) => (
                     <option key={status} value={status}>
@@ -291,15 +394,17 @@ export default async function Home({ searchParams }: HomeProps) {
                   ))}
                 </select>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
-                <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500">
-                  Apply
-                </button>
-                <Link
-                  href="/"
-                  className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
-                >
-                  Clear
-                </Link>
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-end lg:col-span-2">
+                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-24">
+                    Apply
+                  </button>
+                  <Link
+                    href="/"
+                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 sm:min-w-24"
+                  >
+                    Clear
+                  </Link>
+                </div>
               </form>
 
               <div className="mt-5 space-y-4">
@@ -539,6 +644,8 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {["TODO", "DOING", "BLOCKED", "DONE"].map((status) => {
                 const tasksForStatus = tasks.filter((task) => task.status === status);
+                const groupedTodoTasks =
+                  status === "TODO" ? groupTasksBySection(tasksForStatus) : null;
 
                 return (
                   <div
@@ -561,35 +668,44 @@ export default async function Home({ searchParams }: HomeProps) {
                         </div>
                       )}
 
-                      {tasksForStatus.map((task) => {
-                        const requiredAssets = assetLines(task.plan.requiredAssets);
-                        const previewAssets = requiredAssets.slice(0, 2);
+                      {status === "TODO" && groupedTodoTasks && tasksForStatus.length > 0
+                        ? taskGroupSections.map((section) => {
+                            const sectionTasks = groupedTodoTasks[section.title];
 
-                        return (
-                          <div
-                            key={task.id}
-                            className="rounded-xl bg-zinc-900 p-3 text-sm"
-                          >
-                            <p className="font-medium">{task.title}</p>
-                            <p className="mt-1 text-xs text-zinc-500">
-                              {task.plan.idea.title}
-                            </p>
-                            {requiredAssets.length > 0 && (
-                              <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-2 text-xs">
-                                <p className="font-medium text-cyan-100">
-                                  {assetCountLabel(requiredAssets.length)}
-                                </p>
-                                <p className="mt-1 text-zinc-400">
-                                  {previewAssets.join(" | ")}
-                                  {requiredAssets.length > previewAssets.length
-                                    ? ` +${requiredAssets.length - previewAssets.length} more`
-                                    : ""}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                            return (
+                              <details
+                                key={section.title}
+                                open={section.defaultOpen || undefined}
+                                className="group rounded-xl border border-zinc-800 bg-zinc-900/50"
+                              >
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/80">
+                                  <span className="min-w-0">{section.title}</span>
+                                  <span className="flex shrink-0 items-center gap-2">
+                                    <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                                      {sectionTasks.length}
+                                    </span>
+                                    <span className="text-xs text-zinc-500 group-open:rotate-90">
+                                      &gt;
+                                    </span>
+                                  </span>
+                                </summary>
+                                <div className="space-y-3 border-t border-zinc-800 p-3">
+                                  {sectionTasks.length > 0 ? (
+                                    sectionTasks.map((task) => (
+                                      <TaskCard key={task.id} task={task} />
+                                    ))
+                                  ) : (
+                                    <p className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950/70 p-3 text-xs text-zinc-500">
+                                      No tasks in this group.
+                                    </p>
+                                  )}
+                                </div>
+                              </details>
+                            );
+                          })
+                        : tasksForStatus.map((task) => (
+                            <TaskCard key={task.id} task={task} />
+                          ))}
                     </div>
                   </div>
                 );
