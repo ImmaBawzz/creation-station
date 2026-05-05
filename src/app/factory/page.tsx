@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AppSidebar } from "@/app/components/AppSidebar";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
@@ -42,42 +43,11 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-7xl p-6">
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 shadow-2xl">
-            <h1 className="text-2xl font-bold">Factory Planner</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Turn one raw idea into one clear plan.
-            </p>
-
-            <nav className="mt-8 space-y-2 text-sm">
-              <Link
-                href="/dashboard"
-                className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-              >
-                📊 Dashboard
-              </Link>
-              <Link
-                href="/"
-                className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-              >
-                📥 Back to Inbox
-              </Link>
-              <Link
-                href="/settings"
-                className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-              >
-                ⚙️ Settings
-              </Link>
-              <div className="rounded-2xl bg-zinc-800 px-4 py-3">🏭 Factory Planner</div>
-            </nav>
-
-            <div className="mt-8 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100">
-              <p className="font-semibold">Tip</p>
-              <p className="mt-2 text-blue-100/80">
-                Click “Make AI Plan” to turn an idea into a simple project outline.
-                Then review the plan before you approve it on the home page.
-              </p>
-            </div>
-          </aside>
+          <AppSidebar
+            active="factory"
+            title="Factory Planner"
+            subtitle="Turn one raw idea into one clear plan."
+          />
 
           <section className="space-y-6">
             {messages.factoryError && (

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AppSidebar } from "@/app/components/AppSidebar";
+import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
@@ -158,56 +160,12 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 p-6 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 shadow-2xl">
-          <h1 className="text-2xl font-bold">Creation Station</h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Idea Inbox → Factory → Review → Tasks
-          </p>
-
-          <nav className="mt-8 space-y-2 text-sm">
-            <Link
-              href="/dashboard"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              📊 Dashboard
-            </Link>
-            <Link
-              href="/"
-              className="block rounded-2xl bg-zinc-800 px-4 py-3"
-            >
-              📥 Inbox
-            </Link>
-            <Link
-              href="/factory"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              🏭 Factory Planner
-            </Link>
-            <Link
-              href="/settings"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              ⚙️ Settings
-            </Link>
-            <div className="rounded-2xl px-4 py-3 text-zinc-400">🔍 Review</div>
-            <div className="rounded-2xl px-4 py-3 text-zinc-400">✅ Tasks</div>
-            <div className="rounded-2xl px-4 py-3 text-zinc-400">📦 Assets</div>
-            <div className="rounded-2xl px-4 py-3 text-zinc-400">🤖 Agents</div>
-          </nav>
-
-          <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            <p className="font-semibold">Local Backup</p>
-            <p className="mt-2 text-emerald-100/80">
-              Download all ideas, plans, and tasks as one JSON file.
-            </p>
-            <a
-              href="/api/export"
-              className="mt-4 block rounded-xl bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              Export Backup
-            </a>
-          </div>
-        </aside>
+        <AppSidebar
+          active="inbox"
+          title="Creation Station"
+          subtitle="Idea Inbox -> Factory -> Review -> Tasks"
+          showBackup
+        />
 
         <section className="space-y-6">
           {messages.factoryError && (
@@ -226,6 +184,8 @@ export default async function Home({ searchParams }: HomeProps) {
               <p className="mt-2 text-emerald-100/90">{messages.factorySuccess}</p>
             </div>
           )}
+
+          {ideas.length === 0 && <FirstUseOnboarding />}
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

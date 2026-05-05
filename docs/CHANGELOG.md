@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.0 — Release Polish
+
+### Added
+
+- First-use onboarding panel for empty workspaces.
+- Release readiness checklist page.
+- Shared navigation sidebar across core product pages.
+- Wider export backup visibility from navigation sidebars and release checklist.
+- v1.0 release documentation.
+
+### Changed
+
+- Removed locked future areas from the main navigation.
+- Improved empty first-run guidance and release QA guidance.
+- Tightened UI consistency across Inbox, Dashboard, Factory, Settings, and Release pages.
+
+### Not Added
+
+- Schema changes
+- Authentication
+- Teams
+- Connectors
+- Plugin systems
+- Cloud sync
+- Asset vault
+- New AI systems
+
 ## v0.9 — Settings and AI Controls
 
 ### Added

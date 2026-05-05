@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AppSidebar } from "@/app/components/AppSidebar";
 import { db } from "@/lib/db";
 import { statusBadgeClass, statusLabel } from "@/lib/status-ui";
 
@@ -84,39 +85,12 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 p-6 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 shadow-2xl">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Overview of the local Creation Station pipeline.
-          </p>
-
-          <nav className="mt-8 space-y-2 text-sm">
-            <Link
-              href="/dashboard"
-              className="block rounded-2xl bg-zinc-800 px-4 py-3"
-            >
-              📊 Dashboard
-            </Link>
-            <Link
-              href="/"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              📥 Inbox
-            </Link>
-            <Link
-              href="/factory"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              🏭 Factory Planner
-            </Link>
-            <Link
-              href="/settings"
-              className="block rounded-2xl px-4 py-3 text-zinc-400 transition hover:bg-zinc-800/70 hover:text-zinc-100"
-            >
-              ⚙️ Settings
-            </Link>
-          </nav>
-        </aside>
+        <AppSidebar
+          active="dashboard"
+          title="Dashboard"
+          subtitle="Overview of the local Creation Station pipeline."
+          showBackup
+        />
 
         <section className="space-y-6">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">

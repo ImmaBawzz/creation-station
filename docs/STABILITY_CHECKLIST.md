@@ -33,3 +33,7 @@
 - [x] Add search, filter, and archived view
 - [x] Add dashboard overview
 - [x] Add settings and AI provider controls
+- [x] Add v1.0 release polish
+- [x] Add first-use onboarding
+- [x] Add release readiness checklist page
+- [x] Improve navigation consistency
