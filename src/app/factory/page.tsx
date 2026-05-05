@@ -108,8 +108,11 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
 
                 <div className="mt-5 space-y-4">
                   {planningIdeas.length === 0 && (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
-                      No ideas are ready right now. Add a new idea on the home page first.
+                    <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
+                      <p className="font-semibold text-zinc-200">No ideas ready for planning</p>
+                      <p className="mt-2 text-zinc-400">
+                        Save a new idea on the home page, or request a revision from Review Inbox to send an idea back through the Factory.
+                      </p>
                     </div>
                   )}
 
@@ -183,8 +186,11 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
 
                 <div className="mt-5 space-y-4">
                   {latestPlans.length === 0 && (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
-                      No plans yet. Make your first AI plan from the list on the left.
+                    <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
+                      <p className="font-semibold text-zinc-200">No AI plans saved yet</p>
+                      <p className="mt-2 text-zinc-400">
+                        Choose an idea from the left and run Make AI Plan. The newest plan will show up here for a quick read-through.
+                      </p>
                     </div>
                   )}
 

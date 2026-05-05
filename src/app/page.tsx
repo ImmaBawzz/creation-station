@@ -16,6 +16,13 @@ type HomeProps = {
   }>;
 };
 
+const taskEmptyStateCopy: Record<string, string> = {
+  TODO: "Approved plans create tasks here first. Approve a plan in Review Inbox to fill this column.",
+  DOING: "Nothing is actively in progress yet. Move a task here when you start working.",
+  BLOCKED: "No blocked tasks right now. If something stalls, keep the reason visible here.",
+  DONE: "Completed tasks will collect here once work starts moving through the board.",
+};
+
 export default async function Home({ searchParams }: HomeProps) {
   const messages = (await searchParams) ?? {};
 
@@ -170,9 +177,12 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <div className="mt-5 space-y-4">
                 {ideas.length === 0 && (
-                  <p className="text-sm text-zinc-400">
-                    No ideas yet. Add the first spark.
-                  </p>
+                  <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
+                    <p className="font-semibold text-zinc-200">No ideas captured yet</p>
+                    <p className="mt-2 text-zinc-400">
+                      Use the New Idea form above to save the first spark, then send it to the Factory when it is ready for planning.
+                    </p>
+                  </div>
                 )}
 
                 {ideas.map((idea) => (
@@ -261,9 +271,12 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <div className="mt-5 space-y-4">
                 {reviewPlans.length === 0 && (
-                  <p className="text-sm text-zinc-400">
-                    No plans waiting for review.
-                  </p>
+                  <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
+                    <p className="font-semibold text-zinc-200">No plans waiting for review</p>
+                    <p className="mt-2 text-zinc-400">
+                      Send an idea to the Factory to generate a plan. New plans will appear here for approval or revision.
+                    </p>
+                  </div>
                 )}
 
                 {reviewPlans.map((plan) => (
@@ -364,26 +377,31 @@ export default async function Home({ searchParams }: HomeProps) {
             <h2 className="text-xl font-semibold">✅ Task Board</h2>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {["TODO", "DOING", "BLOCKED", "DONE"].map((status) => (
-                <div
-                  key={status}
-                  className="min-h-48 rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-semibold">{statusLabel(status)}</h3>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(status)}`}
-                    >
-                      {
-                        tasks.filter((task) => task.status === status).length
-                      }
-                    </span>
-                  </div>
+              {["TODO", "DOING", "BLOCKED", "DONE"].map((status) => {
+                const tasksForStatus = tasks.filter((task) => task.status === status);
 
-                  <div className="mt-4 space-y-3">
-                    {tasks
-                      .filter((task) => task.status === status)
-                      .map((task) => (
+                return (
+                  <div
+                    key={status}
+                    className="min-h-48 rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-semibold">{statusLabel(status)}</h3>
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(status)}`}
+                      >
+                        {tasksForStatus.length}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {tasksForStatus.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 p-3 text-sm text-zinc-400">
+                          {taskEmptyStateCopy[status]}
+                        </div>
+                      )}
+
+                      {tasksForStatus.map((task) => (
                         <div
                           key={task.id}
                           className="rounded-xl bg-zinc-900 p-3 text-sm"
@@ -394,9 +412,10 @@ export default async function Home({ searchParams }: HomeProps) {
                           </p>
                         </div>
                       ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
