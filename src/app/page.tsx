@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import {
@@ -292,11 +293,14 @@ export default async function Home({ searchParams }: HomeProps) {
                   </div>
                 )}
 
-                {reviewPlans.map((plan) => (
-                  <article
-                    key={plan.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
-                  >
+                {reviewPlans.map((plan) => {
+                  const requiredAssets = assetLines(plan.requiredAssets);
+
+                  return (
+                    <article
+                      key={plan.id}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                    >
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-semibold">{plan.title}</h3>
                       <span
@@ -317,11 +321,26 @@ export default async function Home({ searchParams }: HomeProps) {
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl bg-zinc-900 p-3 text-xs">
-                        <strong>Required Assets</strong>
-                        <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
-                          {plan.requiredAssets}
-                        </pre>
+                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong className="text-cyan-100">Required Assets</strong>
+                          <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-medium text-cyan-100">
+                            {assetCountLabel(requiredAssets.length)}
+                          </span>
+                        </div>
+                        {requiredAssets.length > 0 ? (
+                          <ul className="mt-3 space-y-2 text-zinc-300">
+                            {requiredAssets.map((asset) => (
+                              <li key={asset} className="rounded-lg bg-zinc-950/70 px-3 py-2">
+                                {asset}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-3 text-zinc-400">
+                            No required assets were listed for this plan.
+                          </p>
+                        )}
                       </div>
 
                       <div className="rounded-xl bg-zinc-900 p-3 text-xs">
@@ -390,8 +409,9 @@ export default async function Home({ searchParams }: HomeProps) {
                         </div>
                       )}
                     </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -424,17 +444,35 @@ export default async function Home({ searchParams }: HomeProps) {
                         </div>
                       )}
 
-                      {tasksForStatus.map((task) => (
-                        <div
-                          key={task.id}
-                          className="rounded-xl bg-zinc-900 p-3 text-sm"
-                        >
-                          <p className="font-medium">{task.title}</p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {task.plan.idea.title}
-                          </p>
-                        </div>
-                      ))}
+                      {tasksForStatus.map((task) => {
+                        const requiredAssets = assetLines(task.plan.requiredAssets);
+                        const previewAssets = requiredAssets.slice(0, 2);
+
+                        return (
+                          <div
+                            key={task.id}
+                            className="rounded-xl bg-zinc-900 p-3 text-sm"
+                          >
+                            <p className="font-medium">{task.title}</p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {task.plan.idea.title}
+                            </p>
+                            {requiredAssets.length > 0 && (
+                              <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-2 text-xs">
+                                <p className="font-medium text-cyan-100">
+                                  {assetCountLabel(requiredAssets.length)}
+                                </p>
+                                <p className="mt-1 text-zinc-400">
+                                  {previewAssets.join(" | ")}
+                                  {requiredAssets.length > previewAssets.length
+                                    ? ` +${requiredAssets.length - previewAssets.length} more`
+                                    : ""}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

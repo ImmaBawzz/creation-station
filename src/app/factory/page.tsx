@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import { sendToFactory } from "../actions";
@@ -194,11 +195,14 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                     </div>
                   )}
 
-                  {latestPlans.map((plan) => (
-                    <article
-                      key={plan.id}
-                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
-                    >
+                  {latestPlans.map((plan) => {
+                    const requiredAssets = assetLines(plan.requiredAssets);
+
+                    return (
+                      <article
+                        key={plan.id}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                      >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="font-semibold">{plan.title}</h3>
@@ -224,11 +228,26 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                           <p className="mt-2 whitespace-pre-wrap text-zinc-300">{plan.concept}</p>
                         </section>
 
-                        <section className="rounded-2xl bg-zinc-900 p-3">
-                          <h4 className="font-semibold text-zinc-100">What You Need</h4>
-                          <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
-                            {plan.requiredAssets}
-                          </pre>
+                        <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="font-semibold text-cyan-100">What You Need</h4>
+                            <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-medium text-cyan-100">
+                              {assetCountLabel(requiredAssets.length)}
+                            </span>
+                          </div>
+                          {requiredAssets.length > 0 ? (
+                            <ul className="mt-3 space-y-2 text-zinc-300">
+                              {requiredAssets.map((asset) => (
+                                <li key={asset} className="rounded-xl bg-zinc-950/70 px-3 py-2">
+                                  {asset}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-3 text-zinc-400">
+                              No required assets were listed for this plan.
+                            </p>
+                          )}
                         </section>
 
                         <section className="rounded-2xl bg-zinc-900 p-3">
@@ -245,8 +264,9 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                           </pre>
                         </section>
                       </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
             </div>

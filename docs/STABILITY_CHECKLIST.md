@@ -29,3 +29,4 @@
 - [ ] Better error messages
 - [ ] Add delete/edit controls carefully
 - [x] Add export backup
+- [x] Improve lightweight asset visibility

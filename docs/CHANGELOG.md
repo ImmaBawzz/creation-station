@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.6 — Asset Visibility
+
+### Added
+
+- Clear required-asset lists with counts in Review Inbox.
+- Clear required-asset lists with counts on the Factory Planner latest plans.
+- Small asset need cues on task cards using each task's source plan.
+
+### Not Added
+
+- Asset vault
+- File uploads
+- Asset storage
+- Asset database models
+- External asset connectors
+
 ## v0.5.2 — Export Backup
 
 ### Added
