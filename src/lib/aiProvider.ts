@@ -12,6 +12,51 @@ type OllamaGenerateResponse = {
   error?: string;
 };
 
+function compactErrorText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function modelMissingMessage(model: string): string {
+  return `Ollama could not find the model "${model}". Run "ollama pull ${model}" and try again.`;
+}
+
+function explainHttpFailure(
+  status: number,
+  errorText: string,
+  model: string,
+  baseUrl: string,
+): string {
+  const normalized = compactErrorText(errorText).toLowerCase();
+
+  if (normalized.includes("model") && normalized.includes("not found")) {
+    return modelMissingMessage(model);
+  }
+
+  if (status === 404) {
+    return `Ollama did not respond from ${baseUrl}. Confirm Ollama is running and that OLLAMA_BASE_URL points to the server root.`;
+  }
+
+  if (status >= 500) {
+    return `Ollama returned a server error (${status}). Restart Ollama, then try the plan again.`;
+  }
+
+  if (errorText) {
+    return `Ollama rejected the plan request (${status}): ${compactErrorText(errorText)}`;
+  }
+
+  return `Ollama request failed with status ${status}. Confirm Ollama is running and the selected model is installed.`;
+}
+
+function explainPayloadError(error: string, model: string): string {
+  const normalized = compactErrorText(error).toLowerCase();
+
+  if (normalized.includes("model") && normalized.includes("not found")) {
+    return modelMissingMessage(model);
+  }
+
+  return `Ollama could not finish the plan: ${compactErrorText(error)}`;
+}
+
 function getOllamaConfig() {
   const provider = process.env.AI_PROVIDER ?? "ollama";
 
@@ -47,7 +92,9 @@ function parseFactoryPlannerResult(payload: string): FactoryPlannerResult {
   try {
     parsed = JSON.parse(payload);
   } catch {
-    throw new Error("The AI returned invalid JSON. Try again after checking the selected model.");
+    throw new Error(
+      "The AI returned text instead of the required planner JSON. Try again, and if it keeps happening switch to a model that follows JSON output reliably.",
+    );
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -91,30 +138,20 @@ export async function generateFactoryPlan(
     });
   } catch {
     throw new Error(
-      "Could not reach Ollama. Start Ollama and confirm OLLAMA_BASE_URL is correct in .env.local.",
+      `Could not reach Ollama at ${baseUrl}. Start Ollama, then confirm OLLAMA_BASE_URL in .env.local points to the server root.`,
     );
   }
 
   if (!response.ok) {
     const errorText = (await response.text()).trim();
 
-    if (response.status === 404) {
-      throw new Error(
-        `Ollama could not find the model \"${model}\". Run \"ollama pull ${model}\" and try again.`,
-      );
-    }
-
-    throw new Error(
-      errorText
-        ? `Ollama request failed with status ${response.status}: ${errorText}`
-        : `Ollama request failed with status ${response.status}. Confirm Ollama is running and the model is installed.`,
-    );
+    throw new Error(explainHttpFailure(response.status, errorText, model, baseUrl));
   }
 
   const payload = (await response.json()) as OllamaGenerateResponse;
 
   if (payload.error) {
-    throw new Error(`Ollama error: ${payload.error}`);
+    throw new Error(explainPayloadError(payload.error, model));
   }
 
   if (!payload.response?.trim()) {
