@@ -30,3 +30,4 @@
 - [ ] Add delete/edit controls carefully
 - [x] Add export backup
 - [x] Improve lightweight asset visibility
+- [x] Add search, filter, and archived view

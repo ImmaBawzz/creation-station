@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.7 — Search, Filter, and Archive
+
+### Added
+
+- Idea Inbox search for titles, raw text, tags, and summaries.
+- Status filter for existing idea statuses.
+- Archived ideas are hidden from the main inbox by default.
+- Archived view toggle for reviewing archived ideas.
+
+### Not Added
+
+- Schema changes
+- New dependencies
+- Authentication
+- Teams
+- Connectors
+- Asset vault
+- Advanced search syntax
+
 ## v0.6 — Asset Visibility
 
 ### Added

@@ -14,8 +14,27 @@ type HomeProps = {
   searchParams?: Promise<{
     factoryError?: string;
     factorySuccess?: string;
+    q?: string;
+    status?: string;
+    archived?: string;
   }>;
 };
+
+const ideaStatusFilters = [
+  "ALL",
+  "RAW",
+  "TRIAGED",
+  "IN_FACTORY",
+  "PLAN_READY",
+  "REVIEW_PENDING",
+  "APPROVED",
+  "NEEDS_REVISION",
+  "TASKED",
+  "IN_PRODUCTION",
+  "ASSET_READY",
+  "PUBLISHED",
+  "ARCHIVED",
+];
 
 const taskEmptyStateCopy: Record<string, string> = {
   TODO: "Approved plans create tasks here first. Approve a plan in Review Inbox to fill this column.",
@@ -24,8 +43,60 @@ const taskEmptyStateCopy: Record<string, string> = {
   DONE: "Completed tasks will collect here once work starts moving through the board.",
 };
 
+function cleanSearchParam(value: string | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function includesSearch(value: string | null, query: string): boolean {
+  return (value ?? "").toLowerCase().includes(query);
+}
+
+function buildInboxHref({
+  archived,
+  q,
+  status,
+}: {
+  archived?: boolean;
+  q: string;
+  status: string;
+}): string {
+  const params = new URLSearchParams();
+
+  if (q) {
+    params.set("q", q);
+  }
+
+  if (status !== "ALL") {
+    params.set("status", status);
+  }
+
+  if (archived) {
+    params.set("archived", "1");
+  }
+
+  const query = params.toString();
+  return query ? `/?${query}` : "/";
+}
+
 export default async function Home({ searchParams }: HomeProps) {
   const messages = (await searchParams) ?? {};
+  const searchQuery = cleanSearchParam(messages.q);
+  const normalizedSearchQuery = searchQuery.toLowerCase();
+  const selectedStatus = ideaStatusFilters.includes(messages.status ?? "")
+    ? messages.status ?? "ALL"
+    : "ALL";
+  const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
+  const archiveToggleHref = showArchived
+    ? buildInboxHref({
+        archived: false,
+        q: searchQuery,
+        status: selectedStatus === "ARCHIVED" ? "ALL" : selectedStatus,
+      })
+    : buildInboxHref({
+        archived: true,
+        q: searchQuery,
+        status: selectedStatus,
+      });
 
   const ideas = await db.idea.findMany({
     orderBy: { createdAt: "desc" },
@@ -37,6 +108,27 @@ export default async function Home({ searchParams }: HomeProps) {
         },
       },
     },
+  });
+
+  const filteredIdeas = ideas.filter((idea) => {
+    if (!showArchived && idea.status === "ARCHIVED") {
+      return false;
+    }
+
+    if (selectedStatus !== "ALL" && idea.status !== selectedStatus) {
+      return false;
+    }
+
+    if (!normalizedSearchQuery) {
+      return true;
+    }
+
+    return (
+      includesSearch(idea.title, normalizedSearchQuery) ||
+      includesSearch(idea.rawText, normalizedSearchQuery) ||
+      includesSearch(idea.tags, normalizedSearchQuery) ||
+      includesSearch(idea.summary, normalizedSearchQuery)
+    );
   });
 
   const reviewPlans = await db.factoryPlan.findMany({
@@ -187,19 +279,66 @@ export default async function Home({ searchParams }: HomeProps) {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
-              <h2 className="text-xl font-semibold">📥 Idea Inbox</h2>
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">📥 Idea Inbox</h2>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {filteredIdeas.length} visible of {ideas.length} saved ideas
+                  </p>
+                </div>
+                <Link
+                  href={archiveToggleHref}
+                  className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-center text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800"
+                >
+                  {showArchived ? "Hide Archived" : "Show Archived"}
+                </Link>
+              </div>
+
+              <form className="mt-5 grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-[1fr_180px_auto_auto]">
+                <input
+                  name="q"
+                  defaultValue={searchQuery}
+                  placeholder="Search title, raw text, tags, or summary"
+                  className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                />
+                <select
+                  name="status"
+                  defaultValue={selectedStatus}
+                  className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                >
+                  {ideaStatusFilters.map((status) => (
+                    <option key={status} value={status}>
+                      {status === "ALL" ? "All statuses" : statusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+                {showArchived && <input type="hidden" name="archived" value="1" />}
+                <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500">
+                  Apply
+                </button>
+                <Link
+                  href="/"
+                  className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
+                >
+                  Clear
+                </Link>
+              </form>
 
               <div className="mt-5 space-y-4">
-                {ideas.length === 0 && (
+                {filteredIdeas.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
-                    <p className="font-semibold text-zinc-200">No ideas captured yet</p>
+                    <p className="font-semibold text-zinc-200">
+                      {ideas.length === 0 ? "No ideas captured yet" : "No ideas match this view"}
+                    </p>
                     <p className="mt-2 text-zinc-400">
-                      Use the New Idea form above to save the first spark, then send it to the Factory when it is ready for planning.
+                      {ideas.length === 0
+                        ? "Use the New Idea form above to save the first spark, then send it to the Factory when it is ready for planning."
+                        : "Adjust the search, status filter, or archived view toggle to widen the inbox."}
                     </p>
                   </div>
                 )}
 
-                {ideas.map((idea) => (
+                {filteredIdeas.map((idea) => (
                   <article
                     key={idea.id}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
