@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.5.2 — Export Backup
+
+### Added
+
+- Local JSON export route for all Ideas, FactoryPlans, and Tasks.
+- Export Backup button on the home UI.
+- Backup metadata with `generatedAt` and `appVersion`.
+
+### Not Added
+
+- Prisma schema changes
+- Authentication
+- Cloud storage
+- Asset vault
+- Connectors
+- New AI features
+
 ## v0.5.1 — Stabilization
 
 ### Added

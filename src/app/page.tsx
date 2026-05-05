@@ -89,6 +89,19 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="rounded-2xl px-4 py-3 text-zinc-400">📦 Assets</div>
             <div className="rounded-2xl px-4 py-3 text-zinc-400">🤖 Agents</div>
           </nav>
+
+          <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+            <p className="font-semibold">Local Backup</p>
+            <p className="mt-2 text-emerald-100/80">
+              Download all ideas, plans, and tasks as one JSON file.
+            </p>
+            <a
+              href="/api/export"
+              className="mt-4 block rounded-xl bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Export Backup
+            </a>
+          </div>
         </aside>
 
         <section className="space-y-6">

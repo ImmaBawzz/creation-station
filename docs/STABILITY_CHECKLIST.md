@@ -28,4 +28,4 @@
 - [ ] Better empty states
 - [ ] Better error messages
 - [ ] Add delete/edit controls carefully
-- [ ] Add export backup
+- [x] Add export backup
