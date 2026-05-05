@@ -328,6 +328,13 @@ export default async function Home({ searchParams }: HomeProps) {
                       </div>
                     )}
 
+                    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-300">
+                      <p className="font-semibold text-zinc-100">Choose the next step</p>
+                      <p className="mt-2 text-zinc-400">
+                        Approve this plan if it is ready to become tasks. Request a revision if the next AI plan should use your notes and replace this draft.
+                      </p>
+                    </div>
+
                     <div className="mt-4 flex flex-wrap gap-2">
                       {plan.status !== "REVISION_REQUESTED" && (
                         <form action={approvePlan}>
@@ -341,9 +348,12 @@ export default async function Home({ searchParams }: HomeProps) {
                       {plan.status !== "REVISION_REQUESTED" && (
                         <form action={requestRevision} className="flex flex-col gap-2">
                           <input type="hidden" name="planId" value={plan.id} />
+                          <p className="text-xs text-zinc-400">
+                            Revision notes are saved with this plan and reused the next time you run the Factory for this idea.
+                          </p>
                           <textarea
                             name="revisionNotes"
-                            placeholder="Describe what needs to change (optional)..."
+                            placeholder="Describe what should change in the next AI draft..."
                             rows={2}
                             className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs outline-none focus:border-orange-500"
                           />
@@ -356,11 +366,11 @@ export default async function Home({ searchParams }: HomeProps) {
                       {plan.status === "REVISION_REQUESTED" && (
                         <div className="w-full space-y-2">
                           <p className="text-xs text-orange-300/80">
-                            Revision requested — go to the Idea Inbox and send this idea through the Factory again to generate an improved plan.
+                            Revision requested. The current draft is on hold until you go to the Idea Inbox and click Re-plan with Feedback for this idea.
                           </p>
                           {plan.revisionNotes && (
                             <div className="rounded-xl bg-orange-500/10 p-3 text-xs text-orange-200">
-                              <strong>Revision notes:</strong>
+                              <strong>Saved revision notes for the next AI plan:</strong>
                               <p className="mt-1 whitespace-pre-wrap">{plan.revisionNotes}</p>
                             </div>
                           )}
