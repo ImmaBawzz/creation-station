@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Creation Station
 
-## Getting Started
+Creation Station is a small creative workflow app.
 
-First, run the development server:
+Flow:
+
+1. Save an idea in the Inbox.
+2. Send it to the Factory Planner.
+3. Let Ollama create a first project plan.
+4. Review the plan.
+5. Approve it to create tasks.
+
+## What You Need
+
+1. Node.js installed.
+2. Ollama installed and running.
+3. A local Ollama model pulled to your machine.
+
+Recommended model:
+
+```bash
+ollama pull qwen2.5:14b-instruct
+```
+
+Lighter fallback:
+
+```bash
+ollama pull llama3.1:8b-instruct
+```
+
+## First Setup
+
+1. Install app packages:
+
+```bash
+npm install
+```
+
+2. Make sure your local environment file exists:
+
+```bash
+.env.local
+```
+
+3. Put these values in `.env.local`:
+
+```env
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:14b-instruct
+DATABASE_URL=file:./dev.db
+```
+
+4. Start Ollama.
+
+5. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+6. Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How To Use It
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Inbox
 
-## Learn More
+1. Add a title.
+2. Add the raw idea text.
+3. Click `Save to Inbox`.
 
-To learn more about Next.js, take a look at the following resources:
+### Factory Planner
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Open the `Factory Planner` page.
+2. Find the idea you want.
+3. Click `Make AI Plan`.
+4. Wait for the local model to finish.
+5. Read the plan sections:
+	Summary, Main Concept, What You Need, Risks, Next Steps.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Review And Tasks
 
-## Deploy on Vercel
+1. Go back to the home page.
+2. Review the saved plan.
+3. Click `Approve + Create Tasks`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## If Something Goes Wrong
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Ollama is not running
+
+Start Ollama first, then try again.
+
+### The model name is wrong
+
+Check `OLLAMA_MODEL` in `.env.local`.
+
+### The app cannot reach Ollama
+
+Check `OLLAMA_BASE_URL` in `.env.local`.
+
+### The plan does not save
+
+Make sure the model returned all required fields.
+
+## Useful Commands
+
+```bash
+npm run dev
+npm run lint
+npm run build
+```
