@@ -85,6 +85,7 @@ export type BoardTask = {
   labels?: string | null;
   updatedAt: Date;
   plan: {
+    id: string;
     title: string;
     requiredAssets: string;
     idea: {
@@ -94,6 +95,10 @@ export type BoardTask = {
       tags: string;
     };
   };
+};
+
+type BoardTaskReference = Pick<BoardTask, "id" | "status" | "title"> & {
+  planId: string;
 };
 
 export type TaskBoardQuery = {
@@ -235,7 +240,7 @@ function TaskBlockerForm({
   candidateTasks,
   taskId,
 }: {
-  candidateTasks: BoardTask[];
+  candidateTasks: BoardTaskReference[];
   taskId: string;
 }) {
   if (candidateTasks.length === 0) {
@@ -269,22 +274,31 @@ function TaskBlockerForm({
   );
 }
 
-function TaskCard({ allTasks, task }: { allTasks: BoardTask[]; task: BoardTask }) {
+function TaskCard({
+  task,
+  taskReferences,
+}: {
+  task: BoardTask;
+  taskReferences: BoardTaskReference[];
+}) {
   const requiredAssets = assetLines(task.plan.requiredAssets);
   const previewAssets = requiredAssets.slice(0, 2);
   const taskLabels = getTaskLabels(task);
-  const waitingState = getTaskWaitingState(task, allTasks);
+  const waitingState = getTaskWaitingState(task, taskReferences);
   const blockerIds = task.blockers?.length
     ? task.blockers.map((blocker) => blocker.blockerTaskId)
     : taskBlockerIds(task);
   const staleState = getTaskStaleness(task);
-  const taskById = new Map(allTasks.map((candidateTask) => [candidateTask.id, candidateTask]));
+  const taskById = new Map(
+    taskReferences.map((candidateTask) => [candidateTask.id, candidateTask]),
+  );
   const selectedBlockers = blockerIds
     .map((blockerId) => taskById.get(blockerId))
-    .filter((blocker): blocker is BoardTask => Boolean(blocker));
-  const candidateBlockers = allTasks.filter(
+    .filter((blocker): blocker is BoardTaskReference => Boolean(blocker));
+  const candidateBlockers = taskReferences.filter(
     (candidateTask) =>
       candidateTask.id !== task.id &&
+      candidateTask.planId === task.plan.id &&
       candidateTask.status !== "ARCHIVED" &&
       !blockerIds.includes(candidateTask.id),
   );
@@ -420,14 +434,14 @@ function TaskCard({ allTasks, task }: { allTasks: BoardTask[]; task: BoardTask }
 }
 
 function TaskSection({
-  allTasks,
   query,
   section,
+  taskReferences,
   tasks,
 }: {
-  allTasks: BoardTask[];
   query: TaskBoardQuery;
   section: (typeof taskBoardSections)[number];
+  taskReferences: BoardTaskReference[];
   tasks: BoardTask[];
 }) {
   const groupedActiveTasks =
@@ -490,14 +504,22 @@ function TaskSection({
                   </summary>
                   <div className="space-y-3 border-t border-zinc-800 p-3">
                     {sectionTasks.map((task) => (
-                      <TaskCard key={task.id} allTasks={allTasks} task={task} />
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        taskReferences={taskReferences}
+                      />
                     ))}
                   </div>
                 </details>
               );
             })
           : tasks.map((task) => (
-              <TaskCard key={task.id} allTasks={allTasks} task={task} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                taskReferences={taskReferences}
+              />
             ))}
       </div>
     </details>
@@ -553,6 +575,12 @@ export function TaskBoard({
     query.taskView === "focus"
       ? taskBoardSections.filter((section) => section.title === "Active")
       : taskBoardSections;
+  const taskReferences: BoardTaskReference[] = tasks.map((task) => ({
+    id: task.id,
+    planId: task.plan.id,
+    status: task.status,
+    title: task.title,
+  }));
 
   return (
     <div
@@ -740,9 +768,9 @@ export function TaskBoard({
           return (
             <TaskSection
               key={section.title}
-              allTasks={tasks}
               query={query}
               section={section}
+              taskReferences={taskReferences}
               tasks={tasksForSection}
             />
           );

@@ -46,9 +46,11 @@ export type IntelligenceTask = {
   title: string;
   updatedAt: Date | string;
   plan: {
+    id?: string;
     title: string;
     idea: {
       category: string;
+      id?: string;
       tags: string;
       title: string;
     };
@@ -82,6 +84,19 @@ export type IntelligenceRecommendation = {
 const closedTaskStatuses = new Set(["ARCHIVED", "DONE"]);
 const nextWorkTaskStatuses = new Set(["DOING", "TODO"]);
 
+type TaskMomentumContext = {
+  activeTaskCount: number;
+  blockerImpactByTaskId: Map<string, number>;
+  latestActiveDays: number;
+  planActiveCounts: Map<string, number>;
+  planLatestActiveDays: Map<string, number>;
+};
+
+type ScoredRecommendation = IntelligenceRecommendation & {
+  contextKey: string;
+  score: number;
+};
+
 function normalize(value: string | null | undefined): string {
   return (value ?? "").toLowerCase();
 }
@@ -100,6 +115,10 @@ function daysSince(value: Date | string, now: Date): number {
   );
 }
 
+function planContextKey(task: IntelligenceTask): string {
+  return task.plan.id ?? task.plan.title;
+}
+
 function taskBlockerReferenceIds(task: {
   blockers?: Array<{ blockerTaskId: string }>;
   labels?: string | null;
@@ -108,6 +127,56 @@ function taskBlockerReferenceIds(task: {
     task.blockers?.map((blocker) => blocker.blockerTaskId).filter(Boolean) ?? [];
 
   return persistedBlockerIds.length > 0 ? persistedBlockerIds : taskBlockerIds(task);
+}
+
+function buildTaskMomentumContext(
+  tasks: IntelligenceTask[],
+  now: Date,
+): TaskMomentumContext {
+  const planActiveCounts = new Map<string, number>();
+  const planLatestActiveDays = new Map<string, number>();
+  const blockerImpactByTaskId = new Map<string, number>();
+  let activeTaskCount = 0;
+  let latestActiveDays = Number.POSITIVE_INFINITY;
+
+  for (const task of tasks) {
+    if (nextWorkTaskStatuses.has(task.status)) {
+      const contextKey = planContextKey(task);
+      const taskAge = daysSince(task.updatedAt, now);
+
+      activeTaskCount += 1;
+      latestActiveDays = Math.min(latestActiveDays, taskAge);
+      planActiveCounts.set(contextKey, (planActiveCounts.get(contextKey) ?? 0) + 1);
+      planLatestActiveDays.set(
+        contextKey,
+        Math.min(planLatestActiveDays.get(contextKey) ?? Number.POSITIVE_INFINITY, taskAge),
+      );
+    }
+  }
+
+  for (const task of tasks) {
+    const waitingState = getTaskWaitingState(task, tasks);
+
+    if (!waitingState.isWaiting) {
+      continue;
+    }
+
+    for (const blockerId of waitingState.blockerIds) {
+      blockerImpactByTaskId.set(
+        blockerId,
+        (blockerImpactByTaskId.get(blockerId) ?? 0) + 1,
+      );
+    }
+  }
+
+  return {
+    activeTaskCount,
+    blockerImpactByTaskId,
+    latestActiveDays:
+      latestActiveDays === Number.POSITIVE_INFINITY ? 0 : latestActiveDays,
+    planActiveCounts,
+    planLatestActiveDays,
+  };
 }
 
 function confidenceForScore(score: number): IdeaRoute["confidence"] {
@@ -297,20 +366,63 @@ export function recommendNextTasks(
     DOING: 30,
     TODO: 20,
   };
+  const context = buildTaskMomentumContext(tasks, now);
 
-  return tasks
+  const rankedTasks = tasks
     .filter((task) => nextWorkTaskStatuses.has(task.status))
     .filter((task) => !getTaskWaitingState(task, tasks).isWaiting || task.status === "DOING")
     .map((task) => ({
-      score:
-        (priorityScore[task.priority] ?? 10) +
-        (statusScore[task.status] ?? 0) +
-        Math.min(daysSince(task.updatedAt, now), 10),
+      contextKey: planContextKey(task),
+      score: scoreNextTask(task, tasks, context, now),
       task,
     }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(({ task }) => task);
+    .sort((a, b) => b.score - a.score);
+  const selectedTasks: IntelligenceTask[] = [];
+  const usedContexts = new Set<string>();
+
+  for (const rankedTask of rankedTasks) {
+    if (usedContexts.has(rankedTask.contextKey) && selectedTasks.length < limit - 1) {
+      continue;
+    }
+
+    selectedTasks.push(rankedTask.task);
+    usedContexts.add(rankedTask.contextKey);
+
+    if (selectedTasks.length >= limit) {
+      break;
+    }
+  }
+
+  return selectedTasks;
+
+  function scoreNextTask(
+    task: IntelligenceTask,
+    allTasks: IntelligenceTask[],
+    taskContext: TaskMomentumContext,
+    scoreNow: Date,
+  ): number {
+    const taskAge = daysSince(task.updatedAt, scoreNow);
+    const stale = getTaskStaleness(task, scoreNow);
+    const contextKey = planContextKey(task);
+    const planActiveCount = taskContext.planActiveCounts.get(contextKey) ?? 0;
+    const planLatestAge = taskContext.planLatestActiveDays.get(contextKey) ?? taskAge;
+    const blockerImpact = taskContext.blockerImpactByTaskId.get(task.id) ?? 0;
+    const ageScore = Math.min(taskAge, 21) * (task.status === "DOING" ? 1.25 : 0.8);
+    const momentumScore =
+      Math.min(planActiveCount, 4) * 4 + Math.max(0, 10 - planLatestAge);
+    const blockerUrgencyScore = Math.min(blockerImpact * 14, 42);
+    const stalePenalty = stale ? (stale.severity === "high" ? 55 : 30) : 0;
+
+    return (
+      (priorityScore[task.priority] ?? 10) +
+      (statusScore[task.status] ?? 0) +
+      ageScore +
+      momentumScore +
+      blockerUrgencyScore -
+      stalePenalty +
+      Math.min(allTasks.length, 20) * 0.1
+    );
+  }
 }
 
 export function buildIntelligenceRecommendations({
@@ -326,14 +438,17 @@ export function buildIntelligenceRecommendations({
   reviewPlans: IntelligencePlan[];
   tasks: IntelligenceTask[];
 }): IntelligenceRecommendation[] {
-  const recommendations: IntelligenceRecommendation[] = [];
+  const recommendations: ScoredRecommendation[] = [];
+  const taskContext = buildTaskMomentumContext(tasks, now);
   const pendingReviewPlan = reviewPlans.find((plan) => plan.status === "REVIEW_PENDING");
 
   if (pendingReviewPlan) {
     recommendations.push({
       body: `${pendingReviewPlan.title} is ready for approval or revision before more tasks are created.`,
+      contextKey: pendingReviewPlan.id,
       href: "#review-inbox",
       id: `review-${pendingReviewPlan.id}`,
+      score: 70,
       title: "Review the waiting plan",
       tone: "attention",
     });
@@ -344,8 +459,10 @@ export function buildIntelligenceRecommendations({
   if (revisionIdea) {
     recommendations.push({
       body: `${revisionIdea.title} has revision feedback waiting. Re-plan it before starting parallel task work.`,
+      contextKey: revisionIdea.id,
       href: "/factory",
       id: `revision-${revisionIdea.id}`,
+      score: 85,
       title: "Finish the revision loop",
       tone: "attention",
     });
@@ -357,10 +474,14 @@ export function buildIntelligenceRecommendations({
   );
 
   if (blockedTaskWithoutReference) {
+    const stale = getTaskStaleness(blockedTaskWithoutReference, now);
+
     recommendations.push({
       body: `${blockedTaskWithoutReference.title} is blocked but does not name what it is waiting on yet.`,
+      contextKey: planContextKey(blockedTaskWithoutReference),
       href: "#task-board",
       id: `blocked-${blockedTaskWithoutReference.id}`,
+      score: 90 + (stale ? 15 : 0),
       title: "Clarify a blocker",
       tone: "blocked",
     });
@@ -379,8 +500,10 @@ export function buildIntelligenceRecommendations({
   if (clearedBlockedTask) {
     recommendations.push({
       body: `${clearedBlockedTask.title} has no open blockers left. Move it active or archive it if the work is no longer useful.`,
+      contextKey: planContextKey(clearedBlockedTask),
       href: "#task-board",
       id: `cleared-${clearedBlockedTask.id}`,
+      score: 95,
       title: "Revive cleared work",
       tone: "blocked",
     });
@@ -394,8 +517,10 @@ export function buildIntelligenceRecommendations({
     if (stale) {
       recommendations.push({
         body: `${staleTask.title} has been idle for ${stale.daysStale} days. ${stale.action}`,
+        contextKey: planContextKey(staleTask),
         href: "#task-board",
         id: `stale-${staleTask.id}`,
+        score: stale.severity === "high" ? 80 : 62,
         title: "Resolve stale work",
         tone: "stale",
       });
@@ -405,10 +530,16 @@ export function buildIntelligenceRecommendations({
   const nextTask = recommendNextTasks(tasks, 1, now)[0];
 
   if (nextTask) {
+    const contextKey = planContextKey(nextTask);
+    const planActiveCount = taskContext.planActiveCounts.get(contextKey) ?? 1;
+    const blockerImpact = taskContext.blockerImpactByTaskId.get(nextTask.id) ?? 0;
+
     recommendations.push({
-      body: `${nextTask.title} is the strongest active task based on status, priority, dependencies, and age.`,
+      body: `${nextTask.title} is the strongest active task based on priority, age, project momentum, and dependency impact.`,
+      contextKey,
       href: "#task-board",
       id: `next-${nextTask.id}`,
+      score: 72 + Math.min(planActiveCount * 3, 12) + Math.min(blockerImpact * 8, 24),
       title: "Work this next",
       tone: "priority",
     });
@@ -425,12 +556,39 @@ export function buildIntelligenceRecommendations({
   if (rawRoutedIdea) {
     recommendations.push({
       body: `${rawRoutedIdea.idea.title} looks like ${rawRoutedIdea.route.pipeline}. Send it to the Factory with that route in mind.`,
+      contextKey: rawRoutedIdea.idea.id,
       href: "/factory",
       id: `route-${rawRoutedIdea.idea.id}`,
+      score: 55,
       title: "Route the next idea",
       tone: "route",
     });
   }
 
-  return recommendations.slice(0, limit);
+  const selectedRecommendations: IntelligenceRecommendation[] = [];
+  const usedContexts = new Set<string>();
+
+  for (const recommendation of recommendations.sort((a, b) => b.score - a.score)) {
+    if (
+      usedContexts.has(recommendation.contextKey) &&
+      selectedRecommendations.length < limit - 1
+    ) {
+      continue;
+    }
+
+    selectedRecommendations.push({
+      body: recommendation.body,
+      href: recommendation.href,
+      id: recommendation.id,
+      title: recommendation.title,
+      tone: recommendation.tone,
+    });
+    usedContexts.add(recommendation.contextKey);
+
+    if (selectedRecommendations.length >= limit) {
+      break;
+    }
+  }
+
+  return selectedRecommendations;
 }

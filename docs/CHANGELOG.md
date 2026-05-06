@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.4.1 - Recommendation Tuning
+
+### Added
+
+- Deterministic recommendation scoring for task age, project momentum, blocker impact, context grouping, and stale task penalties.
+- v1.4.1 recommendation QA report covering all four pipelines.
+
+### Changed
+
+- Automation pipeline guidance now separates local automation, API automation, infrastructure automation, and AI tooling automation.
+- Local automation prompt guidance now avoids cloud, external API, and credential assumptions unless explicitly requested.
+- Task-board dependency candidate rendering now uses lightweight same-plan task references to keep large local QA boards stable.
+
+### Not Added
+
+- Prisma schema changes
+- External AI integrations
+- Automation runners
+- Cloud automation connectors
+- New task flow
+
 ## v1.4.0 - Modular Pipeline Foundation
 
 ### Added
