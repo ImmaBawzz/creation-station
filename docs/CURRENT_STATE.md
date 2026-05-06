@@ -1,22 +1,24 @@
 # Creation Station Current State
 
-Current phase: v1.1 planning / release hardening
+Current phase: v1.1 stable baseline
 
 Latest QA result: PASS
 
 v1.1 release candidate status:
-- v1.1 is ready to become a release candidate.
+- `v1.1-rc.1` is the stable baseline.
 - No blocking browser or runtime errors were found during the browser QA pass.
 
 Stable baseline:
-- v1.0 core workflow is functional
+- v1.1-rc.1 is tagged and validated.
 - Idea Inbox, AI Factory Planner, Review Inbox, Revision, Approval, and Tasks are preserved
 
-Current focus:
-- UI polish
-- Task Board organization
-- Release hardening
-- Bug fixing
+Next planning phases:
+- v1.5 = system organization + task-board scalability
+- v2.0 = deeper AI/product architecture
+
+Current focus before new code:
+- Keep the v1.1 baseline clean
+- Plan v1.5 in small, reviewable slices
 - No major architecture expansion
 
 Do not prioritize:
@@ -42,4 +44,4 @@ Tested:
 Findings:
 - Inbox filter layout fix is confirmed.
 - No blocking browser/runtime errors found.
-- v1.1 is ready to become a release candidate.
+- `v1.1-rc.1` is locked as the stable baseline.

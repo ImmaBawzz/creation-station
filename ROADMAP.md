@@ -10,9 +10,38 @@
 
 ## Current Status
 
-- Current completed milestone: `v0.5`
-- Current next active milestone: `v0.6`
-- Current next best step: model required assets more clearly and surface them alongside plans and tasks.
+- Current stable baseline: `v1.1-rc.1`
+- Current completed milestone: `v1.1`
+- Current next planning milestone: `v1.5`
+- Current next best step: plan system organization and task-board scalability from the `v1.1-rc.1` baseline before changing app code.
+
+## Next Planning Phases
+
+### v1.5 - System Organization and Task-Board Scalability
+
+Goal: make the existing local-first workflow easier to operate as the number of ideas, plans, and tasks grows.
+
+Allowed direction:
+- Improve organization, grouping, filters, labels, and compact task-board views.
+- Preserve existing task data and workflow behavior.
+- Keep changes small and reviewable.
+- Prefer clarity and reliability over new product surface.
+
+Non-goals:
+- No new automation engine.
+- No external connectors.
+- No plugin system.
+- No full asset vault.
+- No major architecture rewrite.
+
+### v2.0 - Deeper AI/Product Architecture
+
+Goal: explore deeper AI and product architecture only after v1.5 organization work is planned and stable.
+
+Planning guardrails:
+- Do not begin v2.0 implementation from the v1.1 baseline without a separate plan.
+- Any new subsystem, schema expansion, provider architecture, or agent-like behavior requires explicit approval.
+- Keep the v1.1 core workflow intact as the baseline.
 
 ## v0.2 - AI Factory Planner
 
