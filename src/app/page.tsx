@@ -69,6 +69,18 @@ const taskBoardSections = [
   },
 ] as const;
 
+const taskGroupSections = [
+  { title: "Intake / New", defaultOpen: true },
+  { title: "Validation", defaultOpen: true },
+  { title: "Planning", defaultOpen: true },
+  { title: "Build", defaultOpen: false },
+  { title: "Assets Needed", defaultOpen: false },
+  { title: "Release Prep", defaultOpen: false },
+  { title: "Other", defaultOpen: false },
+] as const;
+
+type TaskGroupTitle = (typeof taskGroupSections)[number]["title"];
+
 type BoardTask = {
   id: string;
   title: string;
@@ -115,6 +127,56 @@ function buildInboxHref({
 
   const query = params.toString();
   return query ? `/?${query}` : "/";
+}
+
+function textIncludesAny(value: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function getTaskGroup(task: BoardTask): TaskGroupTitle {
+  const searchableText = `${task.title} ${task.description}`.toLowerCase();
+
+  if (textIncludesAny(searchableText, ["capture", "idea", "raw"])) {
+    return "Intake / New";
+  }
+
+  if (textIncludesAny(searchableText, ["test", "validate", "feedback", "mvp"])) {
+    return "Validation";
+  }
+
+  if (textIncludesAny(searchableText, ["brief", "plan", "scope", "define"])) {
+    return "Planning";
+  }
+
+  if (textIncludesAny(searchableText, ["build", "create", "implement", "prototype"])) {
+    return "Build";
+  }
+
+  if (textIncludesAny(searchableText, ["asset", "reference", "template", "notes"])) {
+    return "Assets Needed";
+  }
+
+  if (textIncludesAny(searchableText, ["release", "checklist", "polish", "v1"])) {
+    return "Release Prep";
+  }
+
+  return "Other";
+}
+
+function groupTasksBySection(tasks: BoardTask[]): Record<TaskGroupTitle, BoardTask[]> {
+  const groupedTasks = taskGroupSections.reduce(
+    (groups, section) => ({
+      ...groups,
+      [section.title]: [],
+    }),
+    {} as Record<TaskGroupTitle, BoardTask[]>,
+  );
+
+  for (const task of tasks) {
+    groupedTasks[getTaskGroup(task)].push(task);
+  }
+
+  return groupedTasks;
 }
 
 function taskBelongsToSection(
@@ -671,6 +733,10 @@ export default async function Home({ searchParams }: HomeProps) {
                 const tasksForSection = tasks.filter((task) =>
                   taskBelongsToSection(task, section),
                 );
+                const groupedActiveTasks =
+                  section.title === "Active"
+                    ? groupTasksBySection(tasksForSection)
+                    : null;
 
                 return (
                   <div
@@ -696,9 +762,42 @@ export default async function Home({ searchParams }: HomeProps) {
                         </div>
                       )}
 
-                      {tasksForSection.map((task) => (
-                        <TaskCard key={task.id} task={task} />
-                      ))}
+                      {section.title === "Active" && groupedActiveTasks && tasksForSection.length > 0
+                        ? taskGroupSections.map((taskGroup) => {
+                            const sectionTasks = groupedActiveTasks[taskGroup.title];
+
+                            if (sectionTasks.length === 0) {
+                              return null;
+                            }
+
+                            return (
+                              <details
+                                key={taskGroup.title}
+                                open={taskGroup.defaultOpen || undefined}
+                                className="group rounded-xl border border-zinc-800 bg-zinc-900/50"
+                              >
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/80">
+                                  <span className="min-w-0">{taskGroup.title}</span>
+                                  <span className="flex shrink-0 items-center gap-2">
+                                    <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                                      {sectionTasks.length}
+                                    </span>
+                                    <span className="text-xs text-zinc-500 group-open:rotate-90">
+                                      &gt;
+                                    </span>
+                                  </span>
+                                </summary>
+                                <div className="space-y-3 border-t border-zinc-800 p-3">
+                                  {sectionTasks.map((task) => (
+                                    <TaskCard key={task.id} task={task} />
+                                  ))}
+                                </div>
+                              </details>
+                            );
+                          })
+                        : tasksForSection.map((task) => (
+                            <TaskCard key={task.id} task={task} />
+                          ))}
                     </div>
                   </div>
                 );
