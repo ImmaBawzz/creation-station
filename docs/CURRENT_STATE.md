@@ -1,24 +1,30 @@
 # Creation Station Current State
 
-Current phase: v1.1 stable baseline
+Current phase: v1.5 foundation hardening
 
 Latest QA result: PASS
 
-v1.1 release candidate status:
-- `v1.1-rc.1` is the stable baseline.
+v1.1 release status:
+- `v1.1-rc.1` is the release-candidate QA tag.
+- `v1.1.0` is the stable baseline for v1.5 work.
 - No blocking browser or runtime errors were found during the browser QA pass.
 
 Stable baseline:
-- v1.1-rc.1 is tagged and validated.
+- `v1.1.0` is tagged and validated.
 - Idea Inbox, AI Factory Planner, Review Inbox, Revision, Approval, and Tasks are preserved
+
+Current branch state:
+- Active branch: `feature/v1.5-task-separation`
+- This branch is ahead of `v1.1.0` with early task-board separation and collapsible group work.
+- Treat current app changes as v1.5 foundation work under review, not as permission to expand scope.
 
 Next planning phases:
 - v1.5 = system organization + task-board scalability
 - v2.0 = deeper AI/product architecture
 
 Current focus before new code:
-- Keep the v1.1 baseline clean
-- Plan v1.5 in small, reviewable slices
+- Keep the v1.1.0 baseline clear
+- Harden the current v1.5 foundation in small, reviewable slices
 - No major architecture expansion
 
 Do not prioritize:
@@ -44,4 +50,5 @@ Tested:
 Findings:
 - Inbox filter layout fix is confirmed.
 - No blocking browser/runtime errors found.
-- `v1.1-rc.1` is locked as the stable baseline.
+- `v1.1-rc.1` was locked as the release candidate.
+- `v1.1.0` is the stable baseline tag for future work.

@@ -10,10 +10,17 @@
 
 ## Current Status
 
-- Current stable baseline: `v1.1-rc.1`
+- Current stable baseline: `v1.1.0`
 - Current completed milestone: `v1.1`
 - Current next planning milestone: `v1.5`
-- Current next best step: plan system organization and task-board scalability from the `v1.1-rc.1` baseline before changing app code.
+- Current working branch: `feature/v1.5-task-separation`
+- Current next best step: harden the v1.5 foundation from the `v1.1.0` baseline before adding more app behavior.
+
+Baseline notes:
+- `v1.1-rc.1` remains the release-candidate QA tag.
+- `v1.1.0` is the stable baseline tag for v1.5 planning and implementation.
+- `planning/v1.5-system-organization` contains the accepted planning document.
+- `feature/v1.5-task-separation` contains early task-board organization work and should be treated as the active v1.5 foundation branch until redirected.
 
 ## Next Planning Phases
 
