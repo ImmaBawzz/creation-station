@@ -282,6 +282,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const tasks = await db.task.findMany({
     orderBy: { createdAt: "desc" },
     include: {
+      blockers: true,
       plan: {
         include: {
           idea: true,

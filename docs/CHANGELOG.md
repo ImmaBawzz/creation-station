@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.3.1 - Intelligence Persistence Hardening
+
+### Added
+
+- Durable `TaskBlocker` relationships for persisted task dependencies.
+- Multiple blockers per task through the existing task-board dependency panel.
+- Export backup coverage for task blocker relationships.
+
+### Changed
+
+- New blocker edits write to the `TaskBlocker` table instead of `Task.labels`.
+- Recommendation and waiting-state logic prefer persisted blocker relationships while still reading legacy metadata as a fallback.
+- Stale task detection now accounts for status and priority, not only age.
+
+### Not Added
+
+- Dependency graph UI
+- Automation engine
+- Agent workflow system
+- Deadline schema
+- Large task-board rewrite
+
 ## v1.2.1 - Task Metadata Hardening
 
 ### Added

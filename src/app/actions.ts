@@ -2,11 +2,7 @@
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { db } from "@/lib/db";
-import {
-  serializeTaskBlockerIds,
-  serializeTaskLabels,
-  taskLabelsForApprovedAction,
-} from "@/lib/task-labels";
+import { serializeTaskLabels, taskLabelsForApprovedAction } from "@/lib/task-labels";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -330,44 +326,55 @@ export async function updateTaskStatus(formData: FormData) {
 export async function updateTaskBlocker(formData: FormData) {
   const taskId = clean(formData.get("taskId"));
   const blockerTaskId = clean(formData.get("blockerTaskId"));
+  const operation = clean(formData.get("operation"));
 
-  if (!taskId) {
+  if (!taskId || !["add", "remove"].includes(operation)) {
     throw new Error("Task blocker update is invalid.");
   }
 
-  if (blockerTaskId && blockerTaskId === taskId) {
+  if (!blockerTaskId || blockerTaskId === taskId) {
     throw new Error("A task cannot wait on itself.");
   }
 
   await db.$transaction(async (tx) => {
-    const task = await tx.task.findUnique({
-      where: { id: taskId },
-      select: { labels: true },
-    });
-
-    if (!task) {
-      throw new Error("Task not found.");
-    }
-
-    if (blockerTaskId) {
-      const blockerTask = await tx.task.findUnique({
+    const [task, blockerTask] = await Promise.all([
+      tx.task.findUnique({
+        where: { id: taskId },
+        select: { id: true },
+      }),
+      tx.task.findUnique({
         where: { id: blockerTaskId },
         select: { id: true },
-      });
+      }),
+    ]);
 
-      if (!blockerTask) {
-        throw new Error("Blocker task not found.");
-      }
+    if (!task || !blockerTask) {
+      throw new Error("Task blocker update is invalid.");
     }
 
-    await tx.task.update({
-      where: { id: taskId },
-      data: {
-        labels: serializeTaskBlockerIds({
-          blockerIds: blockerTaskId ? [blockerTaskId] : [],
-          labels: task.labels,
-        }),
+    if (operation === "remove") {
+      await tx.taskBlocker.deleteMany({
+        where: {
+          blockerTaskId,
+          taskId,
+        },
+      });
+
+      return;
+    }
+
+    await tx.taskBlocker.upsert({
+      where: {
+        taskId_blockerTaskId: {
+          blockerTaskId,
+          taskId,
+        },
       },
+      create: {
+        blockerTaskId,
+        taskId,
+      },
+      update: {},
     });
   });
 

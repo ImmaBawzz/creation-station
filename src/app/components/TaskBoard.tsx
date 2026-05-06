@@ -68,6 +68,9 @@ const focusStatuses = new Set(["TODO", "DOING", "BLOCKED"]);
 type TaskView = "all" | "focus";
 
 export type BoardTask = {
+  blockers?: Array<{
+    blockerTaskId: string;
+  }>;
   id: string;
   title: string;
   description: string;
@@ -216,23 +219,30 @@ function TaskStatusButton({
 }
 
 function TaskBlockerForm({
-  blockerId,
   candidateTasks,
   taskId,
 }: {
-  blockerId: string;
   candidateTasks: BoardTask[];
   taskId: string;
 }) {
+  if (candidateTasks.length === 0) {
+    return (
+      <p className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-zinc-500">
+        No available tasks to add as blockers.
+      </p>
+    );
+  }
+
   return (
     <form action={updateTaskBlocker} className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
       <input type="hidden" name="taskId" value={taskId} />
+      <input type="hidden" name="operation" value="add" />
       <select
         name="blockerTaskId"
-        defaultValue={blockerId}
+        defaultValue=""
         className="min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-rose-500"
       >
-        <option value="">No blocker</option>
+        <option value="">Add blocker</option>
         {candidateTasks.map((candidateTask) => (
           <option key={candidateTask.id} value={candidateTask.id}>
             {candidateTask.title}
@@ -240,7 +250,7 @@ function TaskBlockerForm({
         ))}
       </select>
       <button className="rounded-lg bg-zinc-800 px-3 py-1 text-xs font-semibold text-zinc-200 hover:bg-zinc-700">
-        Save
+        Add
       </button>
     </form>
   );
@@ -251,11 +261,19 @@ function TaskCard({ allTasks, task }: { allTasks: BoardTask[]; task: BoardTask }
   const previewAssets = requiredAssets.slice(0, 2);
   const taskLabels = getTaskLabels(task);
   const waitingState = getTaskWaitingState(task, allTasks);
-  const blockerId = taskBlockerIds(task)[0] ?? "";
+  const blockerIds = task.blockers?.length
+    ? task.blockers.map((blocker) => blocker.blockerTaskId)
+    : taskBlockerIds(task);
   const staleState = getTaskStaleness(task);
+  const taskById = new Map(allTasks.map((candidateTask) => [candidateTask.id, candidateTask]));
+  const selectedBlockers = blockerIds
+    .map((blockerId) => taskById.get(blockerId))
+    .filter((blocker): blocker is BoardTask => Boolean(blocker));
   const candidateBlockers = allTasks.filter(
     (candidateTask) =>
-      candidateTask.id !== task.id && candidateTask.status !== "ARCHIVED",
+      candidateTask.id !== task.id &&
+      candidateTask.status !== "ARCHIVED" &&
+      !blockerIds.includes(candidateTask.id),
   );
 
   return (
@@ -330,8 +348,28 @@ function TaskCard({ allTasks, task }: { allTasks: BoardTask[]; task: BoardTask }
           Dependency
         </summary>
         <div className="border-t border-zinc-800 p-2 text-zinc-400">
+          {selectedBlockers.length > 0 && (
+            <div className="grid gap-2">
+              {selectedBlockers.map((blocker) => (
+                <form
+                  key={blocker.id}
+                  action={updateTaskBlocker}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5"
+                >
+                  <input type="hidden" name="taskId" value={task.id} />
+                  <input type="hidden" name="blockerTaskId" value={blocker.id} />
+                  <input type="hidden" name="operation" value="remove" />
+                  <span className="min-w-0 truncate text-zinc-300">
+                    Waiting on {blocker.title}
+                  </span>
+                  <button className="shrink-0 rounded-md bg-zinc-800 px-2 py-1 font-semibold text-zinc-200 hover:bg-zinc-700">
+                    Remove
+                  </button>
+                </form>
+              ))}
+            </div>
+          )}
           <TaskBlockerForm
-            blockerId={blockerId}
             candidateTasks={candidateBlockers}
             taskId={task.id}
           />

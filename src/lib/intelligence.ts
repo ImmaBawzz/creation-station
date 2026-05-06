@@ -38,6 +38,9 @@ export type IntelligencePlan = {
 
 export type IntelligenceTask = {
   id: string;
+  blockers?: Array<{
+    blockerTaskId: string;
+  }>;
   labels?: string | null;
   priority: string;
   status: string;
@@ -66,6 +69,7 @@ export type TaskStaleness = {
   action: string;
   daysStale: number;
   label: string;
+  severity: "high" | "medium";
 };
 
 export type IntelligenceRecommendation = {
@@ -181,6 +185,16 @@ function daysSince(value: Date | string, now: Date): number {
   );
 }
 
+function taskBlockerReferenceIds(task: {
+  blockers?: Array<{ blockerTaskId: string }>;
+  labels?: string | null;
+}): string[] {
+  const persistedBlockerIds =
+    task.blockers?.map((blocker) => blocker.blockerTaskId).filter(Boolean) ?? [];
+
+  return persistedBlockerIds.length > 0 ? persistedBlockerIds : taskBlockerIds(task);
+}
+
 function confidenceForScore(score: number): IdeaRoute["confidence"] {
   if (score >= 5) {
     return "high";
@@ -255,10 +269,16 @@ export function detectIdeaRoute(idea: {
 }
 
 export function getTaskWaitingState(
-  task: { id: string; labels?: string | null; status: string; title: string },
+  task: {
+    blockers?: Array<{ blockerTaskId: string }>;
+    id: string;
+    labels?: string | null;
+    status: string;
+    title: string;
+  },
   tasks: Array<{ id: string; status: string; title: string }>,
 ): TaskWaitingState {
-  const blockerIds = taskBlockerIds(task);
+  const blockerIds = taskBlockerReferenceIds(task);
   const taskById = new Map(tasks.map((candidate) => [candidate.id, candidate]));
   const blockers = blockerIds
     .map((blockerId) => taskById.get(blockerId))
@@ -298,14 +318,30 @@ export function getTaskWaitingState(
 }
 
 export function getTaskStaleness(
-  task: Pick<IntelligenceTask, "status" | "updatedAt">,
+  task: Pick<IntelligenceTask, "priority" | "status" | "updatedAt">,
   now = new Date(),
 ): TaskStaleness | null {
   if (closedTaskStatuses.has(task.status)) {
     return null;
   }
 
-  const staleAfterDays = task.status === "BACKLOG" ? 30 : 14;
+  const staleAfterDaysByStatus: Record<string, number> = {
+    BACKLOG: 30,
+    BLOCKED: 10,
+    DOING: 7,
+    TODO: 14,
+  };
+  const priorityAdjustment: Record<string, number> = {
+    CRITICAL: -5,
+    HIGH: -3,
+    LOW: 7,
+    MEDIUM: 0,
+  };
+  const staleAfterDays = Math.max(
+    3,
+    (staleAfterDaysByStatus[task.status] ?? 14) +
+      (priorityAdjustment[task.priority] ?? 0),
+  );
   const daysStale = daysSince(task.updatedAt, now);
 
   if (daysStale < staleAfterDays) {
@@ -321,6 +357,7 @@ export function getTaskStaleness(
     action,
     daysStale,
     label: `${daysStale} days without movement`,
+    severity: daysStale >= staleAfterDays + 14 ? "high" : "medium",
   };
 }
 
@@ -395,7 +432,8 @@ export function buildIntelligenceRecommendations({
   }
 
   const blockedTaskWithoutReference = tasks.find(
-    (task) => task.status === "BLOCKED" && taskBlockerIds(task).length === 0,
+    (task) =>
+      task.status === "BLOCKED" && taskBlockerReferenceIds(task).length === 0,
   );
 
   if (blockedTaskWithoutReference) {
@@ -413,7 +451,7 @@ export function buildIntelligenceRecommendations({
 
     return (
       task.status === "BLOCKED" &&
-      taskBlockerIds(task).length > 0 &&
+      taskBlockerReferenceIds(task).length > 0 &&
       !waitingState.isWaiting
     );
   });
