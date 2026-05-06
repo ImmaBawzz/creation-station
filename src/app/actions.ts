@@ -31,6 +31,28 @@ function getErrorMessage(error: unknown): string {
   return "Something went wrong while making the AI plan. Please try again.";
 }
 
+const allowedTaskStatuses = [
+  "TODO",
+  "DOING",
+  "BLOCKED",
+  "BACKLOG",
+  "DONE",
+  "ARCHIVED",
+] as const;
+
+type TaskStatus = (typeof allowedTaskStatuses)[number];
+
+const allowedTaskStatusSet = new Set<string>(allowedTaskStatuses);
+
+const allowedTaskStatusTransitions: Record<TaskStatus, readonly TaskStatus[]> = {
+  TODO: ["DOING", "BLOCKED", "BACKLOG", "DONE", "ARCHIVED"],
+  DOING: ["TODO", "BLOCKED", "BACKLOG", "DONE", "ARCHIVED"],
+  BLOCKED: ["TODO", "DOING", "BACKLOG", "DONE", "ARCHIVED"],
+  BACKLOG: ["TODO", "DONE", "ARCHIVED"],
+  DONE: ["TODO", "BACKLOG", "ARCHIVED"],
+  ARCHIVED: ["TODO", "BACKLOG", "DONE"],
+};
+
 async function getPromptPresetCookie(name: string): Promise<string> {
   const cookieStore = await cookies();
   const value = cookieStore.get(name)?.value.trim() ?? "";
@@ -143,50 +165,75 @@ export async function sendToFactory(formData: FormData) {
 export async function approvePlan(formData: FormData) {
   const planId = clean(formData.get("planId"));
 
-  const plan = await db.factoryPlan.findUnique({
-    where: { id: planId },
-    include: { idea: true },
-  });
-
-  if (!plan) {
-    throw new Error("Plan not found.");
+  if (!planId) {
+    throw new Error("Plan approval is invalid.");
   }
 
-  await db.factoryPlan.update({
-    where: { id: planId },
-    data: { status: "APPROVED" },
-  });
+  await db.$transaction(async (tx) => {
+    const plan = await tx.factoryPlan.findUnique({
+      where: { id: planId },
+      include: {
+        _count: {
+          select: { tasks: true },
+        },
+      },
+    });
 
-  const parsedActions = plan.nextActions
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .slice(0, 10);
+    if (!plan) {
+      throw new Error("Plan not found.");
+    }
 
-  const taskTitles =
-    parsedActions.length > 0
-      ? parsedActions
-      : [
-          "Clarify MVP scope",
-          "Create project brief",
-          "Define first prototype",
-          "Collect required assets",
-          "Prepare execution checklist",
-        ];
+    if (plan._count.tasks > 0) {
+      return;
+    }
 
-  await db.task.createMany({
-    data: taskTitles.map((title) => ({
-      planId,
-      title,
-      description: `${plan.summary}`,
-      status: "TODO",
-      priority: "MEDIUM",
-    })),
-  });
+    if (plan.status !== "REVIEW_PENDING") {
+      throw new Error("Only plans waiting for review can be approved.");
+    }
 
-  await db.idea.update({
-    where: { id: plan.ideaId },
-    data: { status: "TASKED" },
+    const approval = await tx.factoryPlan.updateMany({
+      where: {
+        id: planId,
+        status: "REVIEW_PENDING",
+      },
+      data: { status: "APPROVED" },
+    });
+
+    if (approval.count !== 1) {
+      return;
+    }
+
+    const parsedActions = plan.nextActions
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(0, 10);
+
+    const taskTitles =
+      parsedActions.length > 0
+        ? parsedActions
+        : [
+            "Clarify MVP scope",
+            "Create project brief",
+            "Define first prototype",
+            "Collect required assets",
+            "Prepare execution checklist",
+          ];
+
+    await tx.task.createMany({
+      data: taskTitles.map((title) => ({
+        planId,
+        title,
+        description: `${plan.summary}`,
+        status: "TODO",
+        priority: "MEDIUM",
+      })),
+    });
+
+    await tx.idea.update({
+      where: { id: plan.ideaId },
+      data: { status: "TASKED" },
+    });
   });
 
   revalidatePath("/");
@@ -234,22 +281,36 @@ export async function archiveIdea(formData: FormData) {
 export async function updateTaskStatus(formData: FormData) {
   const taskId = clean(formData.get("taskId"));
   const nextStatus = clean(formData.get("nextStatus"));
-  const allowedStatuses = new Set([
-    "TODO",
-    "DOING",
-    "BLOCKED",
-    "BACKLOG",
-    "DONE",
-    "ARCHIVED",
-  ]);
 
-  if (!taskId || !allowedStatuses.has(nextStatus)) {
+  if (!taskId || !allowedTaskStatusSet.has(nextStatus)) {
     throw new Error("Task status update is invalid.");
   }
 
-  await db.task.update({
-    where: { id: taskId },
-    data: { status: nextStatus },
+  await db.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    });
+
+    if (!task || !allowedTaskStatusSet.has(task.status)) {
+      throw new Error("Task status update is invalid.");
+    }
+
+    if (task.status === nextStatus) {
+      return;
+    }
+
+    const allowedNextStatuses =
+      allowedTaskStatusTransitions[task.status as TaskStatus];
+
+    if (!allowedNextStatuses.includes(nextStatus as TaskStatus)) {
+      throw new Error("That task status change is not allowed.");
+    }
+
+    await tx.task.update({
+      where: { id: taskId },
+      data: { status: nextStatus },
+    });
   });
 
   revalidatePath("/");
