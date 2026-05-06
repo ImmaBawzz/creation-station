@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<string, string> = {
   TODO: "To Do",
   DOING: "Doing",
   BLOCKED: "Blocked",
+  BACKLOG: "Backlog",
   DONE: "Done",
 };
 
@@ -35,6 +36,7 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   TODO: "border-zinc-700/80 bg-zinc-800/80 text-zinc-200",
   DOING: "border-sky-500/30 bg-sky-500/15 text-sky-200",
   BLOCKED: "border-rose-500/30 bg-rose-500/15 text-rose-200",
+  BACKLOG: "border-amber-500/30 bg-amber-500/15 text-amber-200",
   DONE: "border-emerald-500/30 bg-emerald-500/15 text-emerald-200",
 };
 

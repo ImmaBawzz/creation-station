@@ -230,3 +230,27 @@ export async function archiveIdea(formData: FormData) {
 
   revalidatePath("/");
 }
+
+export async function updateTaskStatus(formData: FormData) {
+  const taskId = clean(formData.get("taskId"));
+  const nextStatus = clean(formData.get("nextStatus"));
+  const allowedStatuses = new Set([
+    "TODO",
+    "DOING",
+    "BLOCKED",
+    "BACKLOG",
+    "DONE",
+    "ARCHIVED",
+  ]);
+
+  if (!taskId || !allowedStatuses.has(nextStatus)) {
+    throw new Error("Task status update is invalid.");
+  }
+
+  await db.task.update({
+    where: { id: taskId },
+    data: { status: nextStatus },
+  });
+
+  revalidatePath("/");
+}

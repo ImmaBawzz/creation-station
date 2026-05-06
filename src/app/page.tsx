@@ -10,6 +10,7 @@ import {
   createIdea,
   requestRevision,
   sendToFactory,
+  updateTaskStatus,
 } from "./actions";
 
 type HomeProps = {
@@ -39,23 +40,34 @@ const ideaStatusFilters = [
 ];
 
 const taskEmptyStateCopy: Record<string, string> = {
-  TODO: "Approved plans create tasks here first. Approve a plan in Review Inbox to fill this column.",
-  DOING: "Nothing is actively in progress yet. Move a task here when you start working.",
-  BLOCKED: "No blocked tasks right now. If something stalls, keep the reason visible here.",
-  DONE: "Completed tasks will collect here once work starts moving through the board.",
+  Active: "Approved plans create active tasks here first. Approve a plan in Review Inbox to fill this section.",
+  Backlog: "No deferred tasks yet. Move tasks here when they are valid but not immediate.",
+  Completed: "Completed tasks collect here when work is finished.",
+  Archived: "Archived tasks stay out of the active board without being deleted.",
 };
 
-const taskGroupSections = [
-  { title: "Intake / New", defaultOpen: true },
-  { title: "Validation", defaultOpen: true },
-  { title: "Planning", defaultOpen: true },
-  { title: "Build", defaultOpen: false },
-  { title: "Assets Needed", defaultOpen: false },
-  { title: "Release Prep", defaultOpen: false },
-  { title: "Other", defaultOpen: false },
+const taskBoardSections = [
+  {
+    title: "Active",
+    statuses: ["TODO", "DOING", "BLOCKED"],
+    description: "Immediate work from approved plans.",
+  },
+  {
+    title: "Backlog",
+    statuses: ["BACKLOG"],
+    description: "Valid work parked for later.",
+  },
+  {
+    title: "Completed",
+    statuses: ["DONE"],
+    description: "Finished work kept for reference.",
+  },
+  {
+    title: "Archived",
+    statuses: ["ARCHIVED"],
+    description: "Hidden or obsolete work preserved locally.",
+  },
 ] as const;
-
-type TaskGroupTitle = (typeof taskGroupSections)[number]["title"];
 
 type BoardTask = {
   id: string;
@@ -105,54 +117,35 @@ function buildInboxHref({
   return query ? `/?${query}` : "/";
 }
 
-function textIncludesAny(value: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => value.includes(keyword));
+function taskBelongsToSection(
+  task: BoardTask,
+  section: (typeof taskBoardSections)[number],
+): boolean {
+  if (section.title === "Active") {
+    return !["BACKLOG", "DONE", "ARCHIVED"].includes(task.status);
+  }
+
+  return (section.statuses as readonly string[]).includes(task.status);
 }
 
-function getTaskGroup(task: BoardTask): TaskGroupTitle {
-  const searchableText = `${task.title} ${task.description}`.toLowerCase();
-
-  if (textIncludesAny(searchableText, ["capture", "idea", "raw"])) {
-    return "Intake / New";
-  }
-
-  if (textIncludesAny(searchableText, ["test", "validate", "feedback", "mvp"])) {
-    return "Validation";
-  }
-
-  if (textIncludesAny(searchableText, ["brief", "plan", "scope", "define"])) {
-    return "Planning";
-  }
-
-  if (textIncludesAny(searchableText, ["build", "create", "implement", "prototype"])) {
-    return "Build";
-  }
-
-  if (textIncludesAny(searchableText, ["asset", "reference", "template", "notes"])) {
-    return "Assets Needed";
-  }
-
-  if (textIncludesAny(searchableText, ["release", "checklist", "polish", "v1"])) {
-    return "Release Prep";
-  }
-
-  return "Other";
-}
-
-function groupTasksBySection(tasks: BoardTask[]): Record<TaskGroupTitle, BoardTask[]> {
-  const groupedTasks = taskGroupSections.reduce(
-    (groups, section) => ({
-      ...groups,
-      [section.title]: [],
-    }),
-    {} as Record<TaskGroupTitle, BoardTask[]>,
+function TaskStatusButton({
+  children,
+  status,
+  taskId,
+}: {
+  children: string;
+  status: string;
+  taskId: string;
+}) {
+  return (
+    <form action={updateTaskStatus}>
+      <input type="hidden" name="taskId" value={taskId} />
+      <input type="hidden" name="nextStatus" value={status} />
+      <button className="rounded-lg bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">
+        {children}
+      </button>
+    </form>
   );
-
-  for (const task of tasks) {
-    groupedTasks[getTaskGroup(task)].push(task);
-  }
-
-  return groupedTasks;
 }
 
 function TaskCard({ task }: { task: BoardTask }) {
@@ -161,7 +154,14 @@ function TaskCard({ task }: { task: BoardTask }) {
 
   return (
     <div className="rounded-xl bg-zinc-900 p-3 text-sm">
-      <p className="font-medium">{task.title}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-medium">{task.title}</p>
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(task.status)}`}
+        >
+          {statusLabel(task.status)}
+        </span>
+      </div>
       <p className="mt-1 text-xs text-zinc-500">{task.plan.idea.title}</p>
       {task.description && (
         <p className="mt-2 text-xs leading-relaxed text-zinc-400">{task.description}</p>
@@ -179,6 +179,28 @@ function TaskCard({ task }: { task: BoardTask }) {
           </p>
         </div>
       )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {task.status !== "TODO" && task.status !== "DOING" && task.status !== "BLOCKED" && (
+          <TaskStatusButton taskId={task.id} status="TODO">
+            Move Active
+          </TaskStatusButton>
+        )}
+        {task.status !== "BACKLOG" && (
+          <TaskStatusButton taskId={task.id} status="BACKLOG">
+            Backlog
+          </TaskStatusButton>
+        )}
+        {task.status !== "DONE" && (
+          <TaskStatusButton taskId={task.id} status="DONE">
+            Mark Done
+          </TaskStatusButton>
+        )}
+        {task.status !== "ARCHIVED" && (
+          <TaskStatusButton taskId={task.id} status="ARCHIVED">
+            Archive
+          </TaskStatusButton>
+        )}
+      </div>
     </div>
   );
 }
@@ -640,70 +662,43 @@ export default async function Home({ searchParams }: HomeProps) {
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
             <h2 className="text-xl font-semibold">✅ Task Board</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Tasks are separated into active work, backlog, completed work, and archived work.
+            </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {["TODO", "DOING", "BLOCKED", "DONE"].map((status) => {
-                const tasksForStatus = tasks.filter((task) => task.status === status);
-                const groupedTodoTasks =
-                  status === "TODO" ? groupTasksBySection(tasksForStatus) : null;
+              {taskBoardSections.map((section) => {
+                const tasksForSection = tasks.filter((task) =>
+                  taskBelongsToSection(task, section),
+                );
 
                 return (
                   <div
-                    key={status}
+                    key={section.title}
                     className="min-h-48 rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-semibold">{statusLabel(status)}</h3>
+                      <div>
+                        <h3 className="font-semibold">{section.title}</h3>
+                        <p className="mt-1 text-xs text-zinc-500">{section.description}</p>
+                      </div>
                       <span
-                        className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(status)}`}
+                        className="rounded-full border border-zinc-700/80 bg-zinc-800/80 px-3 py-1 text-xs font-medium text-zinc-200"
                       >
-                        {tasksForStatus.length}
+                        {tasksForSection.length}
                       </span>
                     </div>
 
                     <div className="mt-4 space-y-3">
-                      {tasksForStatus.length === 0 && (
+                      {tasksForSection.length === 0 && (
                         <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 p-3 text-sm text-zinc-400">
-                          {taskEmptyStateCopy[status]}
+                          {taskEmptyStateCopy[section.title]}
                         </div>
                       )}
 
-                      {status === "TODO" && groupedTodoTasks && tasksForStatus.length > 0
-                        ? taskGroupSections.map((section) => {
-                            const sectionTasks = groupedTodoTasks[section.title];
-
-                            if (sectionTasks.length === 0) {
-                              return null;
-                            }
-
-                            return (
-                              <details
-                                key={section.title}
-                                open={section.defaultOpen || undefined}
-                                className="group rounded-xl border border-zinc-800 bg-zinc-900/50"
-                              >
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/80">
-                                  <span className="min-w-0">{section.title}</span>
-                                  <span className="flex shrink-0 items-center gap-2">
-                                    <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-xs font-medium text-zinc-300">
-                                      {sectionTasks.length}
-                                    </span>
-                                    <span className="text-xs text-zinc-500 group-open:rotate-90">
-                                      &gt;
-                                    </span>
-                                  </span>
-                                </summary>
-                                <div className="space-y-3 border-t border-zinc-800 p-3">
-                                  {sectionTasks.map((task) => (
-                                    <TaskCard key={task.id} task={task} />
-                                  ))}
-                                </div>
-                              </details>
-                            );
-                          })
-                        : tasksForStatus.map((task) => (
-                            <TaskCard key={task.id} task={task} />
-                          ))}
+                      {tasksForSection.map((task) => (
+                        <TaskCard key={task.id} task={task} />
+                      ))}
                     </div>
                   </div>
                 );
