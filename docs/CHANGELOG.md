@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.1 - Task Metadata Hardening
+
+### Added
+
+- Explicit `Task.labels` metadata field for task-board labels.
+- Serialized task labels for newly approved plan tasks.
+- Backward-compatible task-board fallback labels for older tasks with empty label metadata.
+
+### Changed
+
+- Task-board label filters now prefer explicit task metadata before using legacy fallback grouping.
+
+### Not Added
+
+- New task models
+- Label management UI
+- External tagging systems
+- Task logic rewrites
+- Large schema redesign
+
 ## v1.0 — Release Polish
 
 ### Added

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { updateTaskStatus } from "@/app/actions";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { statusBadgeClass, statusLabel } from "@/lib/status-ui";
+import { TASK_LABELS, taskDisplayLabels, type TaskLabel } from "@/lib/task-labels";
 
 const taskEmptyStateCopy: Record<string, string> = {
   Active:
@@ -40,15 +41,10 @@ const taskBoardSections = [
   },
 ] as const;
 
-const taskGroupSections = [
-  { title: "Intake / New", defaultOpen: true },
-  { title: "Validation", defaultOpen: true },
-  { title: "Planning", defaultOpen: true },
-  { title: "Build", defaultOpen: false },
-  { title: "Assets Needed", defaultOpen: false },
-  { title: "Release Prep", defaultOpen: false },
-  { title: "Other", defaultOpen: false },
-] as const;
+const taskGroupSections = TASK_LABELS.map((title) => ({
+  title,
+  defaultOpen: ["Intake / New", "Validation", "Planning"].includes(title),
+}));
 
 const taskStatusFilters = [
   "ALL",
@@ -63,7 +59,6 @@ const taskStatusFilters = [
 const taskPriorityFilters = ["ALL", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const focusStatuses = new Set(["TODO", "DOING", "BLOCKED"]);
 
-type TaskGroupTitle = (typeof taskGroupSections)[number]["title"];
 type TaskView = "all" | "focus";
 
 export type BoardTask = {
@@ -72,6 +67,7 @@ export type BoardTask = {
   description: string;
   status: string;
   priority: string;
+  labels?: string | null;
   plan: {
     title: string;
     requiredAssets: string;
@@ -98,51 +94,25 @@ function includesSearch(value: string | null, query: string): boolean {
   return (value ?? "").toLowerCase().includes(query);
 }
 
-function textIncludesAny(value: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => value.includes(keyword));
+function getTaskLabels(task: BoardTask): TaskLabel[] {
+  return taskDisplayLabels(task);
 }
 
-function getTaskGroup(task: BoardTask): TaskGroupTitle {
-  const searchableText = `${task.title} ${task.description}`.toLowerCase();
-
-  if (textIncludesAny(searchableText, ["capture", "idea", "raw"])) {
-    return "Intake / New";
-  }
-
-  if (textIncludesAny(searchableText, ["test", "validate", "feedback", "mvp"])) {
-    return "Validation";
-  }
-
-  if (textIncludesAny(searchableText, ["brief", "plan", "scope", "define"])) {
-    return "Planning";
-  }
-
-  if (textIncludesAny(searchableText, ["build", "create", "implement", "prototype"])) {
-    return "Build";
-  }
-
-  if (textIncludesAny(searchableText, ["asset", "reference", "template", "notes"])) {
-    return "Assets Needed";
-  }
-
-  if (textIncludesAny(searchableText, ["release", "checklist", "polish", "v1"])) {
-    return "Release Prep";
-  }
-
-  return "Other";
+function getPrimaryTaskLabel(task: BoardTask): TaskLabel {
+  return getTaskLabels(task)[0];
 }
 
-function groupTasksBySection(tasks: BoardTask[]): Record<TaskGroupTitle, BoardTask[]> {
+function groupTasksBySection(tasks: BoardTask[]): Record<TaskLabel, BoardTask[]> {
   const groupedTasks = taskGroupSections.reduce(
     (groups, section) => ({
       ...groups,
       [section.title]: [],
     }),
-    {} as Record<TaskGroupTitle, BoardTask[]>,
+    {} as Record<TaskLabel, BoardTask[]>,
   );
 
   for (const task of tasks) {
-    groupedTasks[getTaskGroup(task)].push(task);
+    groupedTasks[getPrimaryTaskLabel(task)].push(task);
   }
 
   return groupedTasks;
@@ -167,6 +137,7 @@ function taskMatchesSearch(task: BoardTask, query: string): boolean {
   return (
     includesSearch(task.title, query) ||
     includesSearch(task.description, query) ||
+    includesSearch(getTaskLabels(task).join(" "), query) ||
     includesSearch(task.status, query) ||
     includesSearch(task.priority, query) ||
     includesSearch(task.plan.title, query) ||
@@ -240,7 +211,7 @@ function TaskStatusButton({
 function TaskCard({ task }: { task: BoardTask }) {
   const requiredAssets = assetLines(task.plan.requiredAssets);
   const previewAssets = requiredAssets.slice(0, 2);
-  const taskGroup = getTaskGroup(task);
+  const taskLabels = getTaskLabels(task);
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
@@ -259,9 +230,14 @@ function TaskCard({ task }: { task: BoardTask }) {
         <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-300">
           {task.priority}
         </span>
-        <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-300">
-          {taskGroup}
-        </span>
+        {taskLabels.map((label) => (
+          <span
+            key={label}
+            className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-300"
+          >
+            {label}
+          </span>
+        ))}
       </div>
       {task.description && (
         <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-400">
@@ -409,7 +385,7 @@ export function TaskBoard({
       return false;
     }
 
-    if (query.taskLabel !== "ALL" && getTaskGroup(task) !== query.taskLabel) {
+    if (query.taskLabel !== "ALL" && !getTaskLabels(task).includes(query.taskLabel as TaskLabel)) {
       return false;
     }
 

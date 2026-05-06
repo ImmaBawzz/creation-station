@@ -5,6 +5,7 @@ import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
+import { TASK_LABELS } from "@/lib/task-labels";
 import {
   approvePlan,
   archiveIdea,
@@ -57,13 +58,7 @@ const taskStatusFilters = [
 const taskPriorityFilters = ["ALL", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const taskLabels = [
   "ALL",
-  "Intake / New",
-  "Validation",
-  "Planning",
-  "Build",
-  "Assets Needed",
-  "Release Prep",
-  "Other",
+  ...TASK_LABELS,
 ];
 
 function cleanSearchParam(value: string | undefined): string {

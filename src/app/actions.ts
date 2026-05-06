@@ -2,6 +2,7 @@
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { db } from "@/lib/db";
+import { serializeTaskLabels, taskLabelsForApprovedAction } from "@/lib/task-labels";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -221,10 +222,16 @@ export async function approvePlan(formData: FormData) {
           ];
 
     await tx.task.createMany({
-      data: taskTitles.map((title) => ({
+      data: taskTitles.map((title, index) => ({
         planId,
         title,
         description: `${plan.summary}`,
+        labels: serializeTaskLabels(
+          taskLabelsForApprovedAction({
+            actionIndex: index,
+            totalActions: taskTitles.length,
+          }),
+        ),
         status: "TODO",
         priority: "MEDIUM",
       })),
