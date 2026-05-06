@@ -14,32 +14,34 @@
 - Current completed milestone: `v1.1`
 - Current next planning milestone: `v1.5`
 - Current working branch: `feature/v1.5-task-separation`
-- Current next best step: harden the v1.5 foundation from the `v1.1.0` baseline before adding more app behavior.
+- Current next best step: document and implement the v1.5 release-readiness roadmap from the stable v1.4.1 foundation.
 
 Baseline notes:
 - `v1.1-rc.1` remains the release-candidate QA tag.
 - `v1.1.0` is the stable baseline tag for v1.5 planning and implementation.
-- `planning/v1.5-system-organization` contains the accepted planning document.
-- `feature/v1.5-task-separation` contains early task-board organization work and should be treated as the active v1.5 foundation branch until redirected.
+- `docs/roadmap/v1.5-release-readiness.md` is the active v1.5 plan.
+- `docs/roadmap/v1.5-system-organization.md` is earlier foundation planning and remains useful as context for completed organization work.
+- `feature/v1.5-task-separation` is the current active branch containing organization, pipeline, intelligence, dependency, and task-board foundation work.
 
 ## Next Planning Phases
 
-### v1.5 - System Organization and Task-Board Scalability
+### v1.5 - Release Readiness
 
-Goal: make the existing local-first workflow easier to operate as the number of ideas, plans, and tasks grows.
+Goal: prepare the stable local-first solo creator workflow for a v1.5 release without unnecessary architecture.
 
 Allowed direction:
-- Improve organization, grouping, filters, labels, and compact task-board views.
-- Preserve existing task data and workflow behavior.
+- Improve onboarding, UX polish, reliability, analytics, and release readiness.
+- Keep optional cloud persistence limited to manual, opt-in backup persistence guidance and verification.
+- Preserve the current Idea Inbox -> AI Factory Planner -> Review Inbox -> Revision -> Approval -> Tasks workflow.
 - Keep changes small and reviewable.
-- Prefer clarity and reliability over new product surface.
+- Prefer clarity, reliability, and local data safety before adding product surface.
 
 Non-goals:
-- No new automation engine.
-- No external connectors.
-- No plugin system.
-- No full asset vault.
-- No major architecture rewrite.
+- No authentication or team systems.
+- No real cloud sync, background sync, or conflict resolution.
+- No external connectors, agents, automation engines, or plugin systems.
+- No full asset vault or major architecture rewrite.
+- No v2 product architecture work.
 
 ### v2.0 - Deeper AI/Product Architecture
 
