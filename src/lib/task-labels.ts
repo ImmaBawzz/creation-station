@@ -12,11 +12,16 @@ export type TaskLabel = (typeof TASK_LABELS)[number];
 
 const taskLabelSet = new Set<string>(TASK_LABELS);
 
+export type TaskMetadata = {
+  blockedByTaskIds: string[];
+  labels: TaskLabel[];
+};
+
 function textIncludesAny(value: string, keywords: string[]): boolean {
   return keywords.some((keyword) => value.includes(keyword));
 }
 
-function normalizeLabels(labels: string[]): TaskLabel[] {
+function normalizeExplicitLabels(labels: string[]): TaskLabel[] {
   const normalized: TaskLabel[] = [];
 
   for (const label of labels) {
@@ -27,33 +32,136 @@ function normalizeLabels(labels: string[]): TaskLabel[] {
     }
   }
 
+  return normalized;
+}
+
+function normalizeLabels(labels: string[]): TaskLabel[] {
+  const normalized = normalizeExplicitLabels(labels);
+
   return normalized.length > 0 ? normalized : ["Other"];
+}
+
+function normalizeTaskIds(taskIds: string[]): string[] {
+  const normalized: string[] = [];
+
+  for (const taskId of taskIds) {
+    const cleanTaskId = taskId.trim();
+
+    if (cleanTaskId && !normalized.includes(cleanTaskId)) {
+      normalized.push(cleanTaskId);
+    }
+  }
+
+  return normalized;
+}
+
+function parseTaskMetadataObject(value: unknown): TaskMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      blockedByTaskIds: [],
+      labels: [],
+    };
+  }
+
+  const metadata = value as {
+    blockedByTaskIds?: unknown;
+    labels?: unknown;
+  };
+
+  const labels = Array.isArray(metadata.labels)
+    ? normalizeExplicitLabels(
+        metadata.labels.filter((label): label is string => typeof label === "string"),
+      )
+    : [];
+  const blockedByTaskIds = Array.isArray(metadata.blockedByTaskIds)
+    ? normalizeTaskIds(
+        metadata.blockedByTaskIds.filter(
+          (taskId): taskId is string => typeof taskId === "string",
+        ),
+      )
+    : [];
+
+  return {
+    blockedByTaskIds,
+    labels,
+  };
 }
 
 export function serializeTaskLabels(labels: string[]): string {
   return JSON.stringify(normalizeLabels(labels));
 }
 
-export function parseTaskLabels(labels: string | null | undefined): TaskLabel[] {
+export function serializeTaskMetadata(metadata: TaskMetadata): string {
+  const labels = normalizeExplicitLabels(metadata.labels);
+  const blockedByTaskIds = normalizeTaskIds(metadata.blockedByTaskIds);
+
+  if (blockedByTaskIds.length === 0) {
+    return labels.length > 0 ? JSON.stringify(labels) : "";
+  }
+
+  return JSON.stringify({
+    blockedByTaskIds,
+    labels,
+  });
+}
+
+export function parseTaskMetadata(labels: string | null | undefined): TaskMetadata {
   const cleanLabels = labels?.trim() ?? "";
 
   if (!cleanLabels) {
-    return [];
+    return {
+      blockedByTaskIds: [],
+      labels: [],
+    };
   }
 
   try {
     const parsed = JSON.parse(cleanLabels);
 
     if (Array.isArray(parsed)) {
-      return normalizeLabels(
-        parsed.filter((label): label is string => typeof label === "string"),
-      );
+      return {
+        blockedByTaskIds: [],
+        labels: normalizeExplicitLabels(
+          parsed.filter((label): label is string => typeof label === "string"),
+        ),
+      };
+    }
+
+    if (parsed && typeof parsed === "object") {
+      return parseTaskMetadataObject(parsed);
     }
   } catch {
-    return normalizeLabels(cleanLabels.split(/[\n,]/));
+    return {
+      blockedByTaskIds: [],
+      labels: normalizeExplicitLabels(cleanLabels.split(/[\n,]/)),
+    };
   }
 
-  return [];
+  return {
+    blockedByTaskIds: [],
+    labels: [],
+  };
+}
+
+export function parseTaskLabels(labels: string | null | undefined): TaskLabel[] {
+  return parseTaskMetadata(labels).labels;
+}
+
+export function taskBlockerIds(task: { labels?: string | null }): string[] {
+  return parseTaskMetadata(task.labels).blockedByTaskIds;
+}
+
+export function serializeTaskBlockerIds({
+  blockerIds,
+  labels,
+}: {
+  blockerIds: string[];
+  labels?: string | null;
+}): string {
+  return serializeTaskMetadata({
+    ...parseTaskMetadata(labels),
+    blockedByTaskIds: blockerIds,
+  });
 }
 
 export function fallbackTaskLabel({

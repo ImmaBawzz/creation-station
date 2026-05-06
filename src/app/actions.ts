@@ -2,7 +2,11 @@
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { db } from "@/lib/db";
-import { serializeTaskLabels, taskLabelsForApprovedAction } from "@/lib/task-labels";
+import {
+  serializeTaskBlockerIds,
+  serializeTaskLabels,
+  taskLabelsForApprovedAction,
+} from "@/lib/task-labels";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -317,6 +321,53 @@ export async function updateTaskStatus(formData: FormData) {
     await tx.task.update({
       where: { id: taskId },
       data: { status: nextStatus },
+    });
+  });
+
+  revalidatePath("/");
+}
+
+export async function updateTaskBlocker(formData: FormData) {
+  const taskId = clean(formData.get("taskId"));
+  const blockerTaskId = clean(formData.get("blockerTaskId"));
+
+  if (!taskId) {
+    throw new Error("Task blocker update is invalid.");
+  }
+
+  if (blockerTaskId && blockerTaskId === taskId) {
+    throw new Error("A task cannot wait on itself.");
+  }
+
+  await db.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      select: { labels: true },
+    });
+
+    if (!task) {
+      throw new Error("Task not found.");
+    }
+
+    if (blockerTaskId) {
+      const blockerTask = await tx.task.findUnique({
+        where: { id: blockerTaskId },
+        select: { id: true },
+      });
+
+      if (!blockerTask) {
+        throw new Error("Blocker task not found.");
+      }
+    }
+
+    await tx.task.update({
+      where: { id: taskId },
+      data: {
+        labels: serializeTaskBlockerIds({
+          blockerIds: blockerTaskId ? [blockerTaskId] : [],
+          labels: task.labels,
+        }),
+      },
     });
   });
 

@@ -1,9 +1,15 @@
 import Link from "next/link";
 
-import { updateTaskStatus } from "@/app/actions";
+import { updateTaskBlocker, updateTaskStatus } from "@/app/actions";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
+import { getTaskStaleness, getTaskWaitingState } from "@/lib/intelligence";
 import { statusBadgeClass, statusLabel } from "@/lib/status-ui";
-import { TASK_LABELS, taskDisplayLabels, type TaskLabel } from "@/lib/task-labels";
+import {
+  TASK_LABELS,
+  taskBlockerIds,
+  taskDisplayLabels,
+  type TaskLabel,
+} from "@/lib/task-labels";
 
 const taskEmptyStateCopy: Record<string, string> = {
   Active:
@@ -68,6 +74,7 @@ export type BoardTask = {
   status: string;
   priority: string;
   labels?: string | null;
+  updatedAt: Date;
   plan: {
     title: string;
     requiredAssets: string;
@@ -208,10 +215,48 @@ function TaskStatusButton({
   );
 }
 
-function TaskCard({ task }: { task: BoardTask }) {
+function TaskBlockerForm({
+  blockerId,
+  candidateTasks,
+  taskId,
+}: {
+  blockerId: string;
+  candidateTasks: BoardTask[];
+  taskId: string;
+}) {
+  return (
+    <form action={updateTaskBlocker} className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <input type="hidden" name="taskId" value={taskId} />
+      <select
+        name="blockerTaskId"
+        defaultValue={blockerId}
+        className="min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-rose-500"
+      >
+        <option value="">No blocker</option>
+        {candidateTasks.map((candidateTask) => (
+          <option key={candidateTask.id} value={candidateTask.id}>
+            {candidateTask.title}
+          </option>
+        ))}
+      </select>
+      <button className="rounded-lg bg-zinc-800 px-3 py-1 text-xs font-semibold text-zinc-200 hover:bg-zinc-700">
+        Save
+      </button>
+    </form>
+  );
+}
+
+function TaskCard({ allTasks, task }: { allTasks: BoardTask[]; task: BoardTask }) {
   const requiredAssets = assetLines(task.plan.requiredAssets);
   const previewAssets = requiredAssets.slice(0, 2);
   const taskLabels = getTaskLabels(task);
+  const waitingState = getTaskWaitingState(task, allTasks);
+  const blockerId = taskBlockerIds(task)[0] ?? "";
+  const staleState = getTaskStaleness(task);
+  const candidateBlockers = allTasks.filter(
+    (candidateTask) =>
+      candidateTask.id !== task.id && candidateTask.status !== "ARCHIVED",
+  );
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
@@ -257,10 +302,50 @@ function TaskCard({ task }: { task: BoardTask }) {
           </p>
         </div>
       )}
+      {(waitingState.label || staleState) && (
+        <div className="mt-3 grid gap-2 text-xs">
+          {waitingState.label && (
+            <p
+              className={
+                waitingState.isWaiting
+                  ? "rounded-lg border border-rose-500/20 bg-rose-500/10 px-2 py-1.5 text-rose-100"
+                  : "rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1.5 text-emerald-100"
+              }
+            >
+              {waitingState.label}
+            </p>
+          )}
+          {staleState && (
+            <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-amber-100">
+              {staleState.label}. {staleState.action}
+            </p>
+          )}
+        </div>
+      )}
+      <details
+        open={waitingState.isWaiting || undefined}
+        className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/70 text-xs"
+      >
+        <summary className="cursor-pointer list-none px-2 py-1.5 font-medium text-zinc-300 hover:text-zinc-100">
+          Dependency
+        </summary>
+        <div className="border-t border-zinc-800 p-2 text-zinc-400">
+          <TaskBlockerForm
+            blockerId={blockerId}
+            candidateTasks={candidateBlockers}
+            taskId={task.id}
+          />
+        </div>
+      </details>
       <div className="mt-3 flex flex-wrap gap-2">
         {task.status !== "TODO" && task.status !== "DOING" && task.status !== "BLOCKED" && (
           <TaskStatusButton taskId={task.id} status="TODO">
             Move Active
+          </TaskStatusButton>
+        )}
+        {task.status !== "BLOCKED" && (task.status === "TODO" || task.status === "DOING") && (
+          <TaskStatusButton taskId={task.id} status="BLOCKED">
+            Mark Blocked
           </TaskStatusButton>
         )}
         {task.status !== "BACKLOG" && (
@@ -284,10 +369,12 @@ function TaskCard({ task }: { task: BoardTask }) {
 }
 
 function TaskSection({
+  allTasks,
   query,
   section,
   tasks,
 }: {
+  allTasks: BoardTask[];
   query: TaskBoardQuery;
   section: (typeof taskBoardSections)[number];
   tasks: BoardTask[];
@@ -352,13 +439,15 @@ function TaskSection({
                   </summary>
                   <div className="space-y-3 border-t border-zinc-800 p-3">
                     {sectionTasks.map((task) => (
-                      <TaskCard key={task.id} task={task} />
+                      <TaskCard key={task.id} allTasks={allTasks} task={task} />
                     ))}
                   </div>
                 </details>
               );
             })
-          : tasks.map((task) => <TaskCard key={task.id} task={task} />)}
+          : tasks.map((task) => (
+              <TaskCard key={task.id} allTasks={allTasks} task={task} />
+            ))}
       </div>
     </details>
   );
@@ -552,6 +641,7 @@ export function TaskBoard({
           return (
             <TaskSection
               key={section.title}
+              allTasks={tasks}
               query={query}
               section={section}
               tasks={tasksForSection}

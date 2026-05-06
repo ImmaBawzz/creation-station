@@ -4,6 +4,12 @@ import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
+import {
+  buildIntelligenceRecommendations,
+  detectIdeaRoute,
+  type IdeaRoute,
+  type IntelligenceRecommendation,
+} from "@/lib/intelligence";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import { TASK_LABELS } from "@/lib/task-labels";
 import {
@@ -61,6 +67,22 @@ const taskLabels = [
   ...TASK_LABELS,
 ];
 
+const recommendationToneClasses: Record<IntelligenceRecommendation["tone"], string> = {
+  attention: "border-blue-500/25 bg-blue-500/10 text-blue-100",
+  blocked: "border-rose-500/25 bg-rose-500/10 text-rose-100",
+  priority: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
+  route: "border-violet-500/25 bg-violet-500/10 text-violet-100",
+  stale: "border-amber-500/25 bg-amber-500/10 text-amber-100",
+};
+
+const routeBadgeClasses: Record<IdeaRoute["id"], string> = {
+  game: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
+  general: "border-zinc-700 bg-zinc-900 text-zinc-300",
+  music: "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-100",
+  systems: "border-blue-500/25 bg-blue-500/10 text-blue-100",
+  visual: "border-cyan-500/25 bg-cyan-500/10 text-cyan-100",
+};
+
 function cleanSearchParam(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -83,6 +105,69 @@ function cleanTaskLabel(value: string | undefined): string {
 
 function cleanTaskView(value: string | undefined): "all" | "focus" {
   return value === "focus" ? "focus" : "all";
+}
+
+function IdeaRouteBadge({
+  idea,
+}: {
+  idea: {
+    category: string;
+    rawText: string;
+    tags: string;
+    title: string;
+  };
+}) {
+  const route = detectIdeaRoute(idea);
+
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-medium ${routeBadgeClasses[route.id]}`}
+      title={route.reasons.length > 0 ? route.reasons.join(", ") : undefined}
+    >
+      {route.pipeline}
+    </span>
+  );
+}
+
+function AiRecommendationPanel({
+  recommendations,
+}: {
+  recommendations: IntelligenceRecommendation[];
+}) {
+  if (recommendations.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">AI Recommendations</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Current signals from ideas, reviews, blockers, and task age.
+          </p>
+        </div>
+        <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
+          {recommendations.length} signals
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {recommendations.map((recommendation) => (
+          <Link
+            key={recommendation.id}
+            href={recommendation.href}
+            className={`rounded-2xl border p-4 transition hover:border-zinc-500 ${recommendationToneClasses[recommendation.tone]}`}
+          >
+            <p className="font-semibold">{recommendation.title}</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {recommendation.body}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function buildInboxHref({
@@ -204,6 +289,11 @@ export default async function Home({ searchParams }: HomeProps) {
       },
     },
   });
+  const intelligenceRecommendations = buildIntelligenceRecommendations({
+    ideas,
+    reviewPlans,
+    tasks,
+  });
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -234,6 +324,8 @@ export default async function Home({ searchParams }: HomeProps) {
           )}
 
           {ideas.length === 0 && <FirstUseOnboarding />}
+
+          <AiRecommendationPanel recommendations={intelligenceRecommendations} />
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -375,6 +467,7 @@ export default async function Home({ searchParams }: HomeProps) {
                           >
                             {statusLabel(idea.status)}
                           </span>
+                          <IdeaRouteBadge idea={idea} />
                         </div>
                       </div>
                       <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium text-fuchsia-200">
@@ -441,7 +534,10 @@ export default async function Home({ searchParams }: HomeProps) {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
+            <div
+              id="review-inbox"
+              className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl"
+            >
               <h2 className="text-xl font-semibold">🔍 Review Inbox</h2>
 
               <div className="mt-5 space-y-4">
