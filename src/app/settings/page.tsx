@@ -1,5 +1,8 @@
 import { AppSidebar } from "@/app/components/AppSidebar";
 import { getAiProviderStatus } from "@/lib/aiProvider";
+import { getAnalyticsSummary } from "@/lib/analytics";
+import { AnalyticsOverview } from "./AnalyticsOverview";
+import { BackupRestore } from "./BackupRestore";
 import { testAiConnection } from "./actions";
 import { PromptPresets } from "./PromptPresets";
 
@@ -7,6 +10,8 @@ type SettingsPageProps = {
   searchParams?: Promise<{
     aiHealth?: string;
     aiMessage?: string;
+    backupMessage?: string;
+    backupStatus?: string;
   }>;
 };
 
@@ -21,6 +26,7 @@ function healthClasses(ok: boolean): string {
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const params = (await searchParams) ?? {};
   const status = getAiProviderStatus();
+  const analyticsSummary = await getAnalyticsSummary();
   const lastHealthOk = params.aiHealth === "ok";
   const hasHealthResult = Boolean(params.aiHealth && params.aiMessage);
 
@@ -121,6 +127,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           </section>
 
           <PromptPresets />
+
+          <AnalyticsOverview summary={analyticsSummary} />
+
+          <BackupRestore
+            message={params.backupMessage}
+            status={params.backupStatus}
+          />
         </section>
       </div>
     </main>

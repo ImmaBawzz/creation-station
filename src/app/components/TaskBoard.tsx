@@ -20,6 +20,8 @@ import {
 const taskEmptyStateCopy: Record<string, string> = {
   Active:
     "Approved plans create active tasks here first. Approve a plan in Review Inbox to fill this section.",
+  Blocked:
+    "Blocked tasks appear here when active work needs a dependency or decision cleared.",
   Backlog:
     "No deferred tasks yet. Move tasks here when they are valid but not immediate.",
   Completed: "Completed tasks collect here when work is finished.",
@@ -29,8 +31,14 @@ const taskEmptyStateCopy: Record<string, string> = {
 const taskBoardSections = [
   {
     title: "Active",
-    statuses: ["TODO", "DOING", "BLOCKED"],
+    statuses: ["TODO", "DOING"],
     description: "Immediate work from approved plans.",
+    defaultOpen: true,
+  },
+  {
+    title: "Blocked",
+    statuses: ["BLOCKED"],
+    description: "Work that needs a blocker cleared before it can move.",
     defaultOpen: true,
   },
   {
@@ -69,6 +77,8 @@ const taskStatusFilters = [
 ];
 
 const taskPriorityFilters = ["ALL", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const activeStatuses = new Set(["TODO", "DOING"]);
+const blockedStatuses = new Set(["BLOCKED"]);
 const focusStatuses = new Set(["TODO", "DOING", "BLOCKED"]);
 
 type TaskView = "all" | "focus";
@@ -110,6 +120,7 @@ export type TaskBoardQuery = {
   taskPriority: string;
   taskLabel: string;
   taskPipeline: PipelineFilter;
+  taskProject: string;
   taskView: TaskView;
 };
 
@@ -146,10 +157,22 @@ function taskBelongsToSection(
   section: (typeof taskBoardSections)[number],
 ): boolean {
   if (section.title === "Active") {
-    return focusStatuses.has(task.status);
+    return activeStatuses.has(task.status);
   }
 
   return (section.statuses as readonly string[]).includes(task.status);
+}
+
+function taskSectionClass(section: (typeof taskBoardSections)[number]): string {
+  if (section.title === "Active") {
+    return "group rounded-2xl border border-blue-500/25 bg-blue-500/5";
+  }
+
+  if (section.title === "Blocked") {
+    return "group rounded-2xl border border-rose-500/25 bg-rose-500/5";
+  }
+
+  return "group rounded-2xl border border-zinc-800 bg-zinc-950";
 }
 
 function taskMatchesSearch(task: BoardTask, query: string): boolean {
@@ -206,6 +229,10 @@ function buildTaskHref(query: TaskBoardQuery, overrides: Partial<TaskBoardQuery>
 
   if (nextQuery.taskPipeline !== "ALL") {
     params.set("taskPipeline", nextQuery.taskPipeline);
+  }
+
+  if (nextQuery.taskProject !== "ALL") {
+    params.set("taskProject", nextQuery.taskProject);
   }
 
   if (nextQuery.taskView !== "all") {
@@ -451,7 +478,7 @@ function TaskSection({
     <details
       id={`task-section-${section.title.toLowerCase()}`}
       open={section.defaultOpen || undefined}
-      className="group rounded-2xl border border-zinc-800 bg-zinc-950"
+      className={taskSectionClass(section)}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl p-4 transition hover:bg-zinc-900">
         <div className="min-w-0">
@@ -471,7 +498,12 @@ function TaskSection({
       <div className="space-y-3 border-t border-zinc-800 p-4">
         {tasks.length === 0 && (
           <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 p-3 text-sm text-zinc-400">
-            {query.taskQ || query.taskStatus !== "ALL" || query.taskPriority !== "ALL" || query.taskLabel !== "ALL"
+            {query.taskQ ||
+            query.taskStatus !== "ALL" ||
+            query.taskPriority !== "ALL" ||
+            query.taskLabel !== "ALL" ||
+            query.taskPipeline !== "ALL" ||
+            query.taskProject !== "ALL"
               ? "No tasks match the current task filters in this section."
               : taskEmptyStateCopy[section.title]}
           </div>
@@ -558,10 +590,15 @@ export function TaskBoard({
       return false;
     }
 
+    if (query.taskProject !== "ALL" && task.plan.id !== query.taskProject) {
+      return false;
+    }
+
     return taskMatchesSearch(task, normalizedTaskQuery);
   });
 
-  const activeCount = tasks.filter((task) => focusStatuses.has(task.status)).length;
+  const activeCount = tasks.filter((task) => activeStatuses.has(task.status)).length;
+  const blockedCount = tasks.filter((task) => blockedStatuses.has(task.status)).length;
   const backlogCount = tasks.filter((task) => task.status === "BACKLOG").length;
   const completedCount = tasks.filter((task) => task.status === "DONE").length;
   const archivedCount = tasks.filter((task) => task.status === "ARCHIVED").length;
@@ -571,9 +608,25 @@ export function TaskBoard({
     count: tasks.filter((task) => task.plan.idea.pipelineKey === pipelineKey).length,
     pipeline: pipelineDefinitionForKey(pipelineKey),
   }));
+  const projectOptions = Array.from(
+    new Map(
+      tasks.map((task) => [
+        task.plan.id,
+        {
+          id: task.plan.id,
+          label: `${task.plan.idea.title} - ${task.plan.title}`,
+        },
+      ]),
+    ).values(),
+  ).sort((a, b) => a.label.localeCompare(b.label));
+  const selectedProject = projectOptions.find(
+    (project) => project.id === query.taskProject,
+  );
   const visibleSections =
     query.taskView === "focus"
-      ? taskBoardSections.filter((section) => section.title === "Active")
+      ? taskBoardSections.filter(
+          (section) => section.title === "Active" || section.title === "Blocked",
+        )
       : taskBoardSections;
   const taskReferences: BoardTaskReference[] = tasks.map((task) => ({
     id: task.id,
@@ -591,15 +644,21 @@ export function TaskBoard({
         <div>
           <h2 className="text-xl font-semibold">Task Board</h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Tasks are separated into active work, backlog, completed work, and archived work.
+            Tasks are separated into active work, blocked work, backlog, completed work, and archived work.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
           <a
             href="#task-section-active"
             className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-zinc-300 hover:bg-zinc-800"
           >
             Active <span className="font-semibold text-zinc-100">{activeCount}</span>
+          </a>
+          <a
+            href="#task-section-blocked"
+            className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-rose-100 hover:bg-rose-500/15"
+          >
+            Blocked <span className="font-semibold text-rose-50">{blockedCount}</span>
           </a>
           <a
             href="#task-section-backlog"
@@ -671,7 +730,7 @@ export function TaskBoard({
         ))}
       </div>
 
-      <form className="mt-4 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))_auto]">
+      <form className="mt-4 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))_auto]">
         {query.q && <input type="hidden" name="q" value={query.q} />}
         {query.status !== "ALL" && (
           <input type="hidden" name="status" value={query.status} />
@@ -712,6 +771,18 @@ export function TaskBoard({
           ))}
         </select>
         <select
+          name="taskProject"
+          defaultValue={query.taskProject}
+          className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+        >
+          <option value="ALL">All projects</option>
+          {projectOptions.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.label}
+            </option>
+          ))}
+        </select>
+        <select
           name="taskLabel"
           defaultValue={query.taskLabel}
           className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
@@ -734,6 +805,7 @@ export function TaskBoard({
               taskPriority: "ALL",
               taskLabel: "ALL",
               taskPipeline: "ALL",
+              taskProject: "ALL",
               taskView: "all",
             })}
             className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 lg:whitespace-nowrap"
@@ -749,7 +821,7 @@ export function TaskBoard({
         </span>
         {query.taskView === "focus" && (
           <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-blue-100">
-            Showing active work only
+            Showing active and blocked work only
           </span>
         )}
         {query.taskPipeline !== "ALL" && (
@@ -757,9 +829,24 @@ export function TaskBoard({
             {pipelineDefinitionForKey(query.taskPipeline).pipelineName}
           </span>
         )}
+        {selectedProject && (
+          <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-purple-100">
+            {selectedProject.label}
+          </span>
+        )}
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        {tasks.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm text-zinc-400 xl:col-span-2">
+            <p className="font-semibold text-zinc-200">No tasks yet</p>
+            <p className="mt-2">
+              Approve your first project plan to add tasks. Generated tasks will
+              appear here as Active work, then move through Blocked, Backlog,
+              Completed, or Archived as you execute.
+            </p>
+          </div>
+        )}
         {visibleSections.map((section) => {
           const tasksForSection = filteredTasks.filter((task) =>
             taskBelongsToSection(task, section),

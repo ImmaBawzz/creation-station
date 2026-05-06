@@ -46,7 +46,7 @@ export function AppSidebar({
         <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           <p className="font-semibold">Local Backup</p>
           <p className="mt-2 text-emerald-100/80">
-            Download ideas, plans, and tasks as one JSON file.
+            Download ideas, projects, tasks, dependencies, and backup metadata as one JSON file.
           </p>
           <a
             href="/api/export"

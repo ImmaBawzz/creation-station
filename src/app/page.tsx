@@ -37,6 +37,7 @@ type HomeProps = {
     taskPriority?: string;
     taskLabel?: string;
     taskPipeline?: string;
+    taskProject?: string;
     taskView?: string;
     pipeline?: string;
   }>;
@@ -90,6 +91,13 @@ const routeBadgeClasses: Record<PipelineKey, string> = {
   visual: "border-cyan-500/25 bg-cyan-500/10 text-cyan-100",
 };
 
+const ideaStageClasses: Record<string, string> = {
+  Archived: "border-zinc-700 bg-zinc-900 text-zinc-400",
+  Converted: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
+  New: "border-zinc-700 bg-zinc-900 text-zinc-200",
+  Reviewing: "border-blue-500/25 bg-blue-500/10 text-blue-100",
+};
+
 function cleanSearchParam(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -118,6 +126,27 @@ function cleanPipelineFilter(value: string | undefined): PipelineFilter {
 
 function cleanTaskView(value: string | undefined): "all" | "focus" {
   return value === "focus" ? "focus" : "all";
+}
+
+function ideaStage(status: string): "Archived" | "Converted" | "New" | "Reviewing" {
+  if (status === "ARCHIVED") {
+    return "Archived";
+  }
+
+  if (status === "TASKED" || status === "APPROVED") {
+    return "Converted";
+  }
+
+  if (
+    status === "IN_FACTORY" ||
+    status === "NEEDS_REVISION" ||
+    status === "PLAN_READY" ||
+    status === "REVIEW_PENDING"
+  ) {
+    return "Reviewing";
+  }
+
+  return "New";
 }
 
 function IdeaRouteBadge({
@@ -250,6 +279,7 @@ export default async function Home({ searchParams }: HomeProps) {
     taskPriority: cleanTaskPriority(messages.taskPriority),
     taskLabel: cleanTaskLabel(messages.taskLabel),
     taskPipeline: cleanPipelineFilter(messages.taskPipeline),
+    taskProject: cleanSearchParam(messages.taskProject) || "ALL",
     taskView: cleanTaskView(messages.taskView),
   };
   const archiveToggleHref = showArchived
@@ -392,7 +422,10 @@ export default async function Home({ searchParams }: HomeProps) {
             recommendations={intelligenceRecommendations}
           />
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
+          <div
+            id="new-idea"
+            className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl"
+          >
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold">New Idea</h2>
@@ -458,7 +491,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">📥 Idea Inbox</h2>
+                  <h2 className="text-xl font-semibold">Idea Inbox</h2>
                   <p className="mt-1 text-sm text-zinc-400">
                     {filteredIdeas.length} visible of {ideas.length} saved ideas
                   </p>
@@ -471,44 +504,62 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               </div>
 
-              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <input
-                  name="q"
-                  defaultValue={searchQuery}
-                  placeholder="Search title, raw text, tags, or summary"
-                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500 sm:col-span-2"
-                />
-                <select
-                  name="status"
-                  defaultValue={selectedStatus}
-                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
-                >
-                  {ideaStatusFilters.map((status) => (
-                    <option key={status} value={status}>
-                      {status === "ALL" ? "All statuses" : statusLabel(status)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  name="pipeline"
-                  defaultValue={selectedPipeline}
-                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
-                >
-                  <option value="ALL">All pipelines</option>
-                  {pipelineCounts.map(({ pipeline }) => (
-                    <option key={pipeline.key} value={pipeline.key}>
-                      {pipeline.label}
-                    </option>
-                  ))}
-                </select>
+              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]">
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-search">
+                    Find ideas
+                  </label>
+                  <input
+                    id="idea-search"
+                    name="q"
+                    defaultValue={searchQuery}
+                    placeholder="Search title, raw text, tags, or summary"
+                    className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-status">
+                    Workflow state
+                  </label>
+                  <select
+                    id="idea-status"
+                    name="status"
+                    defaultValue={selectedStatus}
+                    className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  >
+                    {ideaStatusFilters.map((status) => (
+                      <option key={status} value={status}>
+                        {status === "ALL" ? "All statuses" : statusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-0">
+                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-pipeline">
+                    Pipeline
+                  </label>
+                  <select
+                    id="idea-pipeline"
+                    name="pipeline"
+                    defaultValue={selectedPipeline}
+                    className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  >
+                    <option value="ALL">All pipelines</option>
+                    {pipelineCounts.map(({ pipeline }) => (
+                      <option key={pipeline.key} value={pipeline.key}>
+                        {pipeline.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-end">
-                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-28 sm:whitespace-nowrap">
-                    Apply Filters
+                <div className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row xl:flex-col">
+                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 xl:whitespace-nowrap">
+                    Apply
                   </button>
                   <Link
                     href="/"
-                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 sm:min-w-24 sm:whitespace-nowrap"
+                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 xl:whitespace-nowrap"
                   >
                     Clear
                   </Link>
@@ -536,7 +587,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 ))}
               </div>
 
-              <div className="mt-5 space-y-4">
+              <div className="mt-5 max-h-[72rem] space-y-3 overflow-y-auto pr-1">
                 {filteredIdeas.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
                     <p className="font-semibold text-zinc-200">
@@ -544,91 +595,121 @@ export default async function Home({ searchParams }: HomeProps) {
                     </p>
                     <p className="mt-2 text-zinc-400">
                       {ideas.length === 0
-                        ? "Use the New Idea form above to save the first spark, then send it to the Factory when it is ready for planning."
+                        ? "Capture your first idea above. That becomes the first project candidate once you send it to the Factory."
                         : "Adjust the search, status filter, or archived view toggle to widen the inbox."}
                     </p>
                   </div>
                 )}
 
-                {filteredIdeas.map((idea) => (
-                  <article
-                    key={idea.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-semibold">{idea.title}</h3>
-                        <p className="mt-1 text-xs text-zinc-500">{idea.category}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(idea.status)}`}
-                          >
-                            {statusLabel(idea.status)}
-                          </span>
-                          <IdeaRouteBadge idea={idea} />
+                {filteredIdeas.map((idea) => {
+                  const stage = ideaStage(idea.status);
+                  const planCount = idea.plans.length;
+                  const taskCount = idea.plans.reduce(
+                    (count, plan) => count + plan.tasks.length,
+                    0,
+                  );
+                  const latestPlan = idea.plans[0] ?? null;
+
+                  return (
+                    <article
+                      key={idea.id}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${ideaStageClasses[stage]}`}
+                            >
+                              {stage}
+                            </span>
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusBadgeClass(idea.status)}`}
+                            >
+                              {statusLabel(idea.status)}
+                            </span>
+                            <IdeaRouteBadge idea={idea} />
+                          </div>
+                          <h3 className="mt-3 font-semibold leading-snug text-zinc-100">
+                            {idea.title}
+                          </h3>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
+                            <span>{idea.category}</span>
+                            <span>{planCount} plans</span>
+                            <span>{taskCount} tasks</span>
+                            <span>{potentialLabel(idea.potential)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                          {idea.status === "RAW" && (
+                            <form action={sendToFactory}>
+                              <input type="hidden" name="ideaId" value={idea.id} />
+                              <input type="hidden" name="returnTo" value="/" />
+                              <button className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500">
+                                Convert in Factory
+                              </button>
+                            </form>
+                          )}
+
+                          {idea.status === "NEEDS_REVISION" && (
+                            <form action={sendToFactory}>
+                              <input type="hidden" name="ideaId" value={idea.id} />
+                              <input type="hidden" name="returnTo" value="/" />
+                              <button className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-semibold hover:bg-orange-500">
+                                Convert Revised Plan
+                              </button>
+                            </form>
+                          )}
+
+                          {idea.status === "PLAN_READY" && (
+                            <Link
+                              href="#review-inbox"
+                              className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500"
+                            >
+                              Review Plan
+                            </Link>
+                          )}
+
+                          {idea.status === "TASKED" && (
+                            <Link
+                              href="#task-board"
+                              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold hover:bg-emerald-500"
+                            >
+                              Open Tasks
+                            </Link>
+                          )}
+
+                          {idea.status !== "ARCHIVED" && (
+                            <form action={archiveIdea}>
+                              <input type="hidden" name="ideaId" value={idea.id} />
+                              <button className="rounded-xl bg-zinc-800 px-3 py-2 text-xs font-semibold hover:bg-zinc-700">
+                                Archive
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </div>
-                      <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium text-fuchsia-200">
-                        {potentialLabel(idea.potential)}
-                      </span>
-                    </div>
 
-                    <p className="mt-3 text-sm text-zinc-300">{idea.rawText}</p>
-
-                    {idea.tags && (
-                      <p className="mt-3 text-xs text-purple-300">
-                        Tags: {idea.tags}
+                      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-zinc-300">
+                        {idea.rawText}
                       </p>
-                    )}
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {idea.status === "RAW" && (
-                        <form action={sendToFactory}>
-                          <input type="hidden" name="ideaId" value={idea.id} />
-                          <input type="hidden" name="returnTo" value="/" />
-                          <button className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500">
-                            Send to Factory
-                          </button>
-                        </form>
-                      )}
-
-                      {idea.status === "NEEDS_REVISION" && (
-                        <form action={sendToFactory}>
-                          <input type="hidden" name="ideaId" value={idea.id} />
-                          <input type="hidden" name="returnTo" value="/" />
-                          <button className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-semibold hover:bg-orange-500">
-                            Re-plan with Feedback
-                          </button>
-                        </form>
-                      )}
-
-                      {idea.status === "PLAN_READY" && (
-                        <span
-                          className={`rounded-xl border px-3 py-2 text-xs font-medium ${statusBadgeClass(idea.status)}`}
-                        >
-                          {statusLabel(idea.status)}
-                        </span>
-                      )}
-
-                      {idea.status === "TASKED" && (
-                        <span
-                          className={`rounded-xl border px-3 py-2 text-xs font-medium ${statusBadgeClass(idea.status)}`}
-                        >
-                          {statusLabel(idea.status)}
-                        </span>
-                      )}
-
-                      {idea.status !== "ARCHIVED" && (
-                        <form action={archiveIdea}>
-                          <input type="hidden" name="ideaId" value={idea.id} />
-                          <button className="rounded-xl bg-zinc-800 px-3 py-2 text-xs font-semibold hover:bg-zinc-700">
-                            Archive
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  </article>
-                ))}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        {idea.tags && (
+                          <span className="rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-purple-200">
+                            {idea.tags}
+                          </span>
+                        )}
+                        {latestPlan && (
+                          <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-400">
+                            Latest plan: {statusLabel(latestPlan.status)}
+                          </span>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
 
@@ -641,9 +722,9 @@ export default async function Home({ searchParams }: HomeProps) {
               <div className="mt-5 space-y-4">
                 {reviewPlans.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
-                    <p className="font-semibold text-zinc-200">No plans waiting for review</p>
+                    <p className="font-semibold text-zinc-200">No project plans waiting for review</p>
                     <p className="mt-2 text-zinc-400">
-                      Send an idea to the Factory to generate a plan. New plans will appear here for approval or revision.
+                      Convert your first idea in the Factory to create a project plan. New plans appear here for approval or revision before they become tasks.
                     </p>
                   </div>
                 )}

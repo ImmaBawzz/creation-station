@@ -1,40 +1,18 @@
-import { db } from "@/lib/db";
-import packageJson from "../../../../package.json";
-
-function backupFilename(generatedAt: string): string {
-  return `creation-station-backup-${generatedAt.replace(/[:.]/g, "-")}.json`;
-}
+import { logAnalyticsEvent } from "@/lib/analytics";
+import { backupFilename, buildWorkspaceBackup } from "@/lib/backup";
 
 export async function GET() {
-  const generatedAt = new Date().toISOString();
+  const backup = await buildWorkspaceBackup();
 
-  const [ideas, factoryPlans, tasks, taskBlockers] = await Promise.all([
-    db.idea.findMany({
-      orderBy: { createdAt: "asc" },
-    }),
-    db.factoryPlan.findMany({
-      orderBy: { createdAt: "asc" },
-    }),
-    db.task.findMany({
-      orderBy: { createdAt: "asc" },
-    }),
-    db.taskBlocker.findMany({
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
-
-  const backup = {
-    generatedAt,
-    appVersion: packageJson.version,
-    ideas,
-    factoryPlans,
-    tasks,
-    taskBlockers,
-  };
+  await logAnalyticsEvent("backup_exported", {
+    ideas: backup.ideas.length,
+    projects: backup.projects.length,
+    tasks: backup.tasks.length,
+  });
 
   return Response.json(backup, {
     headers: {
-      "Content-Disposition": `attachment; filename="${backupFilename(generatedAt)}"`,
+      "Content-Disposition": `attachment; filename="${backupFilename(backup.exportedAt)}"`,
     },
   });
 }

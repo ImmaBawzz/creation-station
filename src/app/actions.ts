@@ -1,6 +1,7 @@
 "use server";
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
+import { logAnalyticsEvent } from "@/lib/analytics";
 import { db } from "@/lib/db";
 import { serializeTaskLabels, taskLabelsForApprovedAction } from "@/lib/task-labels";
 import { cookies } from "next/headers";
@@ -75,7 +76,7 @@ export async function createIdea(formData: FormData) {
     throw new Error("Title and raw idea text are required.");
   }
 
-  await db.idea.create({
+  const idea = await db.idea.create({
     data: {
       title,
       rawText,
@@ -83,6 +84,10 @@ export async function createIdea(formData: FormData) {
       tags,
       status: "RAW",
     },
+  });
+
+  await logAnalyticsEvent("idea_created", {
+    ideaId: idea.id,
   });
 
   revalidatePath("/");
@@ -131,7 +136,7 @@ export async function sendToFactory(formData: FormData) {
         : null,
     });
 
-    await db.factoryPlan.create({
+    const plan = await db.factoryPlan.create({
       data: {
         ideaId: idea.id,
         ...generatedPlan,
@@ -145,6 +150,15 @@ export async function sendToFactory(formData: FormData) {
         status: "PLAN_READY",
         summary: generatedPlan.summary,
       },
+    });
+
+    await logAnalyticsEvent("idea_converted", {
+      ideaId: idea.id,
+      projectId: plan.id,
+    });
+    await logAnalyticsEvent("project_created", {
+      ideaId: idea.id,
+      projectId: plan.id,
     });
   } catch (error) {
     redirect(
@@ -170,7 +184,7 @@ export async function approvePlan(formData: FormData) {
     throw new Error("Plan approval is invalid.");
   }
 
-  await db.$transaction(async (tx) => {
+  const createdTaskMetadata = await db.$transaction(async (tx) => {
     const plan = await tx.factoryPlan.findUnique({
       where: { id: planId },
       include: {
@@ -185,7 +199,7 @@ export async function approvePlan(formData: FormData) {
     }
 
     if (plan._count.tasks > 0) {
-      return;
+      return null;
     }
 
     if (plan.status !== "REVIEW_PENDING") {
@@ -201,7 +215,7 @@ export async function approvePlan(formData: FormData) {
     });
 
     if (approval.count !== 1) {
-      return;
+      return null;
     }
 
     const parsedActions = plan.nextActions
@@ -221,8 +235,10 @@ export async function approvePlan(formData: FormData) {
             "Prepare execution checklist",
           ];
 
-    await tx.task.createMany({
-      data: taskTitles.map((title, index) => ({
+    const createdTasks = await Promise.all(
+      taskTitles.map((title, index) =>
+        tx.task.create({
+          data: {
         planId,
         title,
         description: `${plan.summary}`,
@@ -234,14 +250,33 @@ export async function approvePlan(formData: FormData) {
         ),
         status: "TODO",
         priority: "MEDIUM",
-      })),
-    });
+          },
+        }),
+      ),
+    );
 
     await tx.idea.update({
       where: { id: plan.ideaId },
       data: { status: "TASKED" },
     });
+
+    return {
+      ideaId: plan.ideaId,
+      taskIds: createdTasks.map((task) => task.id),
+    };
   });
+
+  if (createdTaskMetadata) {
+    await Promise.all(
+      createdTaskMetadata.taskIds.map((taskId) =>
+        logAnalyticsEvent("task_created", {
+          ideaId: createdTaskMetadata.ideaId,
+          projectId: planId,
+          taskId,
+        }),
+      ),
+    );
+  }
 
   revalidatePath("/");
 }
@@ -293,10 +328,10 @@ export async function updateTaskStatus(formData: FormData) {
     throw new Error("Task status update is invalid.");
   }
 
-  await db.$transaction(async (tx) => {
+  const statusChange = await db.$transaction(async (tx) => {
     const task = await tx.task.findUnique({
       where: { id: taskId },
-      select: { status: true },
+      select: { planId: true, status: true },
     });
 
     if (!task || !allowedTaskStatusSet.has(task.status)) {
@@ -304,7 +339,7 @@ export async function updateTaskStatus(formData: FormData) {
     }
 
     if (task.status === nextStatus) {
-      return;
+      return null;
     }
 
     const allowedNextStatuses =
@@ -318,7 +353,28 @@ export async function updateTaskStatus(formData: FormData) {
       where: { id: taskId },
       data: { status: nextStatus },
     });
+
+    return {
+      previousStatus: task.status,
+      projectId: task.planId,
+    };
   });
+
+  if (statusChange && nextStatus === "DONE") {
+    await logAnalyticsEvent("task_completed", {
+      previousStatus: statusChange.previousStatus,
+      projectId: statusChange.projectId,
+      taskId,
+    });
+  }
+
+  if (statusChange && nextStatus === "ARCHIVED") {
+    await logAnalyticsEvent("task_archived", {
+      previousStatus: statusChange.previousStatus,
+      projectId: statusChange.projectId,
+      taskId,
+    });
+  }
 
   revalidatePath("/");
 }
