@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppSidebar } from "@/app/components/AppSidebar";
 import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
+import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
@@ -10,7 +11,6 @@ import {
   createIdea,
   requestRevision,
   sendToFactory,
-  updateTaskStatus,
 } from "./actions";
 
 type HomeProps = {
@@ -20,6 +20,11 @@ type HomeProps = {
     q?: string;
     status?: string;
     archived?: string;
+    taskQ?: string;
+    taskStatus?: string;
+    taskPriority?: string;
+    taskLabel?: string;
+    taskView?: string;
   }>;
 };
 
@@ -39,60 +44,27 @@ const ideaStatusFilters = [
   "ARCHIVED",
 ];
 
-const taskEmptyStateCopy: Record<string, string> = {
-  Active: "Approved plans create active tasks here first. Approve a plan in Review Inbox to fill this section.",
-  Backlog: "No deferred tasks yet. Move tasks here when they are valid but not immediate.",
-  Completed: "Completed tasks collect here when work is finished.",
-  Archived: "Archived tasks stay out of the active board without being deleted.",
-};
+const taskStatusFilters = [
+  "ALL",
+  "TODO",
+  "DOING",
+  "BLOCKED",
+  "BACKLOG",
+  "DONE",
+  "ARCHIVED",
+];
 
-const taskBoardSections = [
-  {
-    title: "Active",
-    statuses: ["TODO", "DOING", "BLOCKED"],
-    description: "Immediate work from approved plans.",
-  },
-  {
-    title: "Backlog",
-    statuses: ["BACKLOG"],
-    description: "Valid work parked for later.",
-  },
-  {
-    title: "Completed",
-    statuses: ["DONE"],
-    description: "Finished work kept for reference.",
-  },
-  {
-    title: "Archived",
-    statuses: ["ARCHIVED"],
-    description: "Hidden or obsolete work preserved locally.",
-  },
-] as const;
-
-const taskGroupSections = [
-  { title: "Intake / New", defaultOpen: true },
-  { title: "Validation", defaultOpen: true },
-  { title: "Planning", defaultOpen: true },
-  { title: "Build", defaultOpen: false },
-  { title: "Assets Needed", defaultOpen: false },
-  { title: "Release Prep", defaultOpen: false },
-  { title: "Other", defaultOpen: false },
-] as const;
-
-type TaskGroupTitle = (typeof taskGroupSections)[number]["title"];
-
-type BoardTask = {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  plan: {
-    requiredAssets: string;
-    idea: {
-      title: string;
-    };
-  };
-};
+const taskPriorityFilters = ["ALL", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const taskLabels = [
+  "ALL",
+  "Intake / New",
+  "Validation",
+  "Planning",
+  "Build",
+  "Assets Needed",
+  "Release Prep",
+  "Other",
+];
 
 function cleanSearchParam(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
@@ -100,6 +72,22 @@ function cleanSearchParam(value: string | undefined): string {
 
 function includesSearch(value: string | null, query: string): boolean {
   return (value ?? "").toLowerCase().includes(query);
+}
+
+function cleanTaskStatus(value: string | undefined): string {
+  return taskStatusFilters.includes(value ?? "") ? value ?? "ALL" : "ALL";
+}
+
+function cleanTaskPriority(value: string | undefined): string {
+  return taskPriorityFilters.includes(value ?? "") ? value ?? "ALL" : "ALL";
+}
+
+function cleanTaskLabel(value: string | undefined): string {
+  return taskLabels.includes(value ?? "") ? value ?? "ALL" : "ALL";
+}
+
+function cleanTaskView(value: string | undefined): "all" | "focus" {
+  return value === "focus" ? "focus" : "all";
 }
 
 function buildInboxHref({
@@ -129,144 +117,6 @@ function buildInboxHref({
   return query ? `/?${query}` : "/";
 }
 
-function textIncludesAny(value: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => value.includes(keyword));
-}
-
-function getTaskGroup(task: BoardTask): TaskGroupTitle {
-  const searchableText = `${task.title} ${task.description}`.toLowerCase();
-
-  if (textIncludesAny(searchableText, ["capture", "idea", "raw"])) {
-    return "Intake / New";
-  }
-
-  if (textIncludesAny(searchableText, ["test", "validate", "feedback", "mvp"])) {
-    return "Validation";
-  }
-
-  if (textIncludesAny(searchableText, ["brief", "plan", "scope", "define"])) {
-    return "Planning";
-  }
-
-  if (textIncludesAny(searchableText, ["build", "create", "implement", "prototype"])) {
-    return "Build";
-  }
-
-  if (textIncludesAny(searchableText, ["asset", "reference", "template", "notes"])) {
-    return "Assets Needed";
-  }
-
-  if (textIncludesAny(searchableText, ["release", "checklist", "polish", "v1"])) {
-    return "Release Prep";
-  }
-
-  return "Other";
-}
-
-function groupTasksBySection(tasks: BoardTask[]): Record<TaskGroupTitle, BoardTask[]> {
-  const groupedTasks = taskGroupSections.reduce(
-    (groups, section) => ({
-      ...groups,
-      [section.title]: [],
-    }),
-    {} as Record<TaskGroupTitle, BoardTask[]>,
-  );
-
-  for (const task of tasks) {
-    groupedTasks[getTaskGroup(task)].push(task);
-  }
-
-  return groupedTasks;
-}
-
-function taskBelongsToSection(
-  task: BoardTask,
-  section: (typeof taskBoardSections)[number],
-): boolean {
-  if (section.title === "Active") {
-    return !["BACKLOG", "DONE", "ARCHIVED"].includes(task.status);
-  }
-
-  return (section.statuses as readonly string[]).includes(task.status);
-}
-
-function TaskStatusButton({
-  children,
-  status,
-  taskId,
-}: {
-  children: string;
-  status: string;
-  taskId: string;
-}) {
-  return (
-    <form action={updateTaskStatus}>
-      <input type="hidden" name="taskId" value={taskId} />
-      <input type="hidden" name="nextStatus" value={status} />
-      <button className="rounded-lg bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">
-        {children}
-      </button>
-    </form>
-  );
-}
-
-function TaskCard({ task }: { task: BoardTask }) {
-  const requiredAssets = assetLines(task.plan.requiredAssets);
-  const previewAssets = requiredAssets.slice(0, 2);
-
-  return (
-    <div className="rounded-xl bg-zinc-900 p-3 text-sm">
-      <div className="flex items-start justify-between gap-3">
-        <p className="font-medium">{task.title}</p>
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(task.status)}`}
-        >
-          {statusLabel(task.status)}
-        </span>
-      </div>
-      <p className="mt-1 text-xs text-zinc-500">{task.plan.idea.title}</p>
-      {task.description && (
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400">{task.description}</p>
-      )}
-      {requiredAssets.length > 0 && (
-        <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-2 text-xs">
-          <p className="font-medium text-cyan-100">
-            {assetCountLabel(requiredAssets.length)}
-          </p>
-          <p className="mt-1 text-zinc-400">
-            {previewAssets.join(" | ")}
-            {requiredAssets.length > previewAssets.length
-              ? ` +${requiredAssets.length - previewAssets.length} more`
-              : ""}
-          </p>
-        </div>
-      )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {task.status !== "TODO" && task.status !== "DOING" && task.status !== "BLOCKED" && (
-          <TaskStatusButton taskId={task.id} status="TODO">
-            Move Active
-          </TaskStatusButton>
-        )}
-        {task.status !== "BACKLOG" && (
-          <TaskStatusButton taskId={task.id} status="BACKLOG">
-            Backlog
-          </TaskStatusButton>
-        )}
-        {task.status !== "DONE" && (
-          <TaskStatusButton taskId={task.id} status="DONE">
-            Mark Done
-          </TaskStatusButton>
-        )}
-        {task.status !== "ARCHIVED" && (
-          <TaskStatusButton taskId={task.id} status="ARCHIVED">
-            Archive
-          </TaskStatusButton>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default async function Home({ searchParams }: HomeProps) {
   const messages = (await searchParams) ?? {};
   const searchQuery = cleanSearchParam(messages.q);
@@ -275,6 +125,16 @@ export default async function Home({ searchParams }: HomeProps) {
     ? messages.status ?? "ALL"
     : "ALL";
   const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
+  const taskBoardQuery: TaskBoardQuery = {
+    q: searchQuery,
+    status: selectedStatus,
+    archived: showArchived,
+    taskQ: cleanSearchParam(messages.taskQ),
+    taskStatus: cleanTaskStatus(messages.taskStatus),
+    taskPriority: cleanTaskPriority(messages.taskPriority),
+    taskLabel: cleanTaskLabel(messages.taskLabel),
+    taskView: cleanTaskView(messages.taskView),
+  };
   const archiveToggleHref = showArchived
     ? buildInboxHref({
         archived: false,
@@ -722,88 +582,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
-            <h2 className="text-xl font-semibold">✅ Task Board</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Tasks are separated into active work, backlog, completed work, and archived work.
-            </p>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {taskBoardSections.map((section) => {
-                const tasksForSection = tasks.filter((task) =>
-                  taskBelongsToSection(task, section),
-                );
-                const groupedActiveTasks =
-                  section.title === "Active"
-                    ? groupTasksBySection(tasksForSection)
-                    : null;
-
-                return (
-                  <div
-                    key={section.title}
-                    className="min-h-48 rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold">{section.title}</h3>
-                        <p className="mt-1 text-xs text-zinc-500">{section.description}</p>
-                      </div>
-                      <span
-                        className="rounded-full border border-zinc-700/80 bg-zinc-800/80 px-3 py-1 text-xs font-medium text-zinc-200"
-                      >
-                        {tasksForSection.length}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                      {tasksForSection.length === 0 && (
-                        <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 p-3 text-sm text-zinc-400">
-                          {taskEmptyStateCopy[section.title]}
-                        </div>
-                      )}
-
-                      {section.title === "Active" && groupedActiveTasks && tasksForSection.length > 0
-                        ? taskGroupSections.map((taskGroup) => {
-                            const sectionTasks = groupedActiveTasks[taskGroup.title];
-
-                            if (sectionTasks.length === 0) {
-                              return null;
-                            }
-
-                            return (
-                              <details
-                                key={taskGroup.title}
-                                open={taskGroup.defaultOpen || undefined}
-                                className="group rounded-xl border border-zinc-800 bg-zinc-900/50"
-                              >
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800/80">
-                                  <span className="min-w-0">{taskGroup.title}</span>
-                                  <span className="flex shrink-0 items-center gap-2">
-                                    <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-xs font-medium text-zinc-300">
-                                      {sectionTasks.length}
-                                    </span>
-                                    <span className="text-xs text-zinc-500 group-open:rotate-90">
-                                      &gt;
-                                    </span>
-                                  </span>
-                                </summary>
-                                <div className="space-y-3 border-t border-zinc-800 p-3">
-                                  {sectionTasks.map((task) => (
-                                    <TaskCard key={task.id} task={task} />
-                                  ))}
-                                </div>
-                              </details>
-                            );
-                          })
-                        : tasksForSection.map((task) => (
-                            <TaskCard key={task.id} task={task} />
-                          ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <TaskBoard query={taskBoardQuery} tasks={tasks as BoardTask[]} />
         </section>
       </div>
     </main>
