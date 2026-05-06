@@ -1,15 +1,14 @@
+import {
+  PIPELINE_DEFINITIONS,
+  PIPELINE_KEYS,
+  pipelineDefinitionForKey,
+  type PipelineKey,
+} from "@/lib/pipelines";
 import { taskBlockerIds } from "@/lib/task-labels";
-
-export type IdeaRouteId =
-  | "game"
-  | "general"
-  | "music"
-  | "systems"
-  | "visual";
 
 export type IdeaRoute = {
   confidence: "high" | "low" | "medium";
-  id: IdeaRouteId;
+  id: PipelineKey;
   label: string;
   pipeline: string;
   reasons: string[];
@@ -83,90 +82,6 @@ export type IntelligenceRecommendation = {
 const closedTaskStatuses = new Set(["ARCHIVED", "DONE"]);
 const nextWorkTaskStatuses = new Set(["DOING", "TODO"]);
 
-const routeRules: Array<{
-  categories: string[];
-  id: Exclude<IdeaRouteId, "general">;
-  keywords: string[];
-  label: string;
-  pipeline: string;
-}> = [
-  {
-    categories: ["music"],
-    id: "music",
-    keywords: [
-      "album",
-      "audio",
-      "beat",
-      "hook",
-      "lyrics",
-      "melody",
-      "music",
-      "song",
-      "suno",
-      "track",
-      "udio",
-    ],
-    label: "Music",
-    pipeline: "Music pipeline",
-  },
-  {
-    categories: ["film", "video", "visual art"],
-    id: "visual",
-    keywords: [
-      "art",
-      "image",
-      "lighting",
-      "midjourney",
-      "render",
-      "runway",
-      "shot",
-      "storyboard",
-      "thumbnail",
-      "video",
-      "visual",
-    ],
-    label: "Visual",
-    pipeline: "Visual engine",
-  },
-  {
-    categories: ["games"],
-    id: "game",
-    keywords: [
-      "fortnite",
-      "game",
-      "level",
-      "mechanic",
-      "npc",
-      "player",
-      "quest",
-      "survival",
-      "uefn",
-      "unreal",
-    ],
-    label: "Game",
-    pipeline: "UEFN pipeline",
-  },
-  {
-    categories: ["ai systems", "knowledge", "product ideas"],
-    id: "systems",
-    keywords: [
-      "automation",
-      "dashboard",
-      "database",
-      "generator",
-      "operating system",
-      "pipeline",
-      "process",
-      "script",
-      "system",
-      "tool",
-      "workflow",
-    ],
-    label: "Systems",
-    pipeline: "Systems pipeline",
-  },
-];
-
 function normalize(value: string | null | undefined): string {
   return (value ?? "").toLowerCase();
 }
@@ -219,16 +134,17 @@ export function detectIdeaRoute(idea: {
   const body = normalize(idea.rawText);
   const searchableText = `${title} ${body} ${tags}`;
 
-  const scoredRoutes = routeRules.map((route) => {
+  const scoredRoutes = PIPELINE_KEYS.filter((key) => key !== "general").map((key) => {
+    const pipeline = PIPELINE_DEFINITIONS[key];
     let score = 0;
     const reasons: string[] = [];
 
-    if (route.categories.includes(category)) {
+    if (pipeline.categoryAliases.includes(category)) {
       score += 3;
       reasons.push(`category: ${idea.category}`);
     }
 
-    for (const keyword of route.keywords) {
+    for (const keyword of pipeline.keywords) {
       if (tags.includes(keyword)) {
         score += 2;
         reasons.push(`tag: ${keyword}`);
@@ -241,7 +157,9 @@ export function detectIdeaRoute(idea: {
     }
 
     return {
-      ...route,
+      id: pipeline.key,
+      label: pipeline.label,
+      pipeline: pipeline.pipelineName,
       reasons: reasons.slice(0, 2),
       score,
     };
@@ -250,11 +168,13 @@ export function detectIdeaRoute(idea: {
   const bestRoute = scoredRoutes.sort((a, b) => b.score - a.score)[0];
 
   if (!bestRoute || bestRoute.score === 0) {
+    const generalPipeline = pipelineDefinitionForKey("general");
+
     return {
       confidence: "low",
-      id: "general",
-      label: "General",
-      pipeline: "General planning",
+      id: generalPipeline.key,
+      label: generalPipeline.label,
+      pipeline: generalPipeline.pipelineName,
       reasons: [],
     };
   }

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.4.0 - Modular Pipeline Foundation
+
+### Added
+
+- Central pipeline registry for music, visual, game, automation, and general planning.
+- Pipeline-aware Factory prompt guidance while preserving the existing JSON plan shape.
+- Compact pipeline filtering and counts for the inbox and task board.
+- v1.4 modular pipeline architecture documentation.
+
+### Changed
+
+- Idea routing now consumes shared pipeline definitions instead of hardcoded route rules.
+- Pipeline badges and recommendations use the same shared registry.
+
+### Not Added
+
+- Prisma schema changes
+- Separate pipeline routes
+- Agent systems
+- External connectors
+- Asset vault
+- Automation runners
+
 ## v1.3.1 - Intelligence Persistence Hardening
 
 ### Added

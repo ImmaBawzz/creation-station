@@ -1,5 +1,8 @@
 import "server-only";
 
+import { detectIdeaRoute } from "@/lib/intelligence";
+import { pipelineDefinitionForKey } from "@/lib/pipelines";
+
 export type FactoryPlannerIdeaInput = {
   title: string;
   rawText: string;
@@ -29,6 +32,8 @@ export type FactoryPlannerResult = {
 };
 
 export function buildFactoryPrompt(idea: FactoryPlannerIdeaInput): string {
+  const route = detectIdeaRoute(idea);
+  const pipeline = pipelineDefinitionForKey(route.id);
   const lines = [
     "You are the Factory Planner for a creative project management app.",
     "Turn the user's raw idea into a simple, useful project plan.",
@@ -46,6 +51,16 @@ export function buildFactoryPrompt(idea: FactoryPlannerIdeaInput): string {
     `Tags: ${idea.tags || "None"}`,
     `Priority: ${idea.priority}`,
     `Potential: ${idea.potential}`,
+    "",
+    "Detected pipeline:",
+    `${pipeline.pipelineName} (${route.confidence} confidence)`,
+    pipeline.description,
+    "",
+    "Pipeline guidance:",
+    ...pipeline.factoryGuidance,
+    "",
+    "Recommended plan sections to cover inside the existing JSON fields:",
+    pipeline.recommendedSections.join(", "),
   ];
 
   if (idea.promptPresets?.factory) {

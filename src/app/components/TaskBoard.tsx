@@ -3,6 +3,12 @@ import Link from "next/link";
 import { updateTaskBlocker, updateTaskStatus } from "@/app/actions";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { getTaskStaleness, getTaskWaitingState } from "@/lib/intelligence";
+import {
+  PIPELINE_FILTERS,
+  pipelineDefinitionForKey,
+  type PipelineFilter,
+  type PipelineKey,
+} from "@/lib/pipelines";
 import { statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import {
   TASK_LABELS,
@@ -84,6 +90,7 @@ export type BoardTask = {
     idea: {
       title: string;
       category: string;
+      pipelineKey: PipelineKey;
       tags: string;
     };
   };
@@ -97,6 +104,7 @@ export type TaskBoardQuery = {
   taskStatus: string;
   taskPriority: string;
   taskLabel: string;
+  taskPipeline: PipelineFilter;
   taskView: TaskView;
 };
 
@@ -154,6 +162,7 @@ function taskMatchesSearch(task: BoardTask, query: string): boolean {
     includesSearch(task.plan.requiredAssets, query) ||
     includesSearch(task.plan.idea.title, query) ||
     includesSearch(task.plan.idea.category, query) ||
+    includesSearch(pipelineDefinitionForKey(task.plan.idea.pipelineKey).pipelineName, query) ||
     includesSearch(task.plan.idea.tags, query)
   );
 }
@@ -188,6 +197,10 @@ function buildTaskHref(query: TaskBoardQuery, overrides: Partial<TaskBoardQuery>
 
   if (nextQuery.taskLabel !== "ALL") {
     params.set("taskLabel", nextQuery.taskLabel);
+  }
+
+  if (nextQuery.taskPipeline !== "ALL") {
+    params.set("taskPipeline", nextQuery.taskPipeline);
   }
 
   if (nextQuery.taskView !== "all") {
@@ -516,6 +529,13 @@ export function TaskBoard({
       return false;
     }
 
+    if (
+      query.taskPipeline !== "ALL" &&
+      task.plan.idea.pipelineKey !== query.taskPipeline
+    ) {
+      return false;
+    }
+
     return taskMatchesSearch(task, normalizedTaskQuery);
   });
 
@@ -523,6 +543,12 @@ export function TaskBoard({
   const backlogCount = tasks.filter((task) => task.status === "BACKLOG").length;
   const completedCount = tasks.filter((task) => task.status === "DONE").length;
   const archivedCount = tasks.filter((task) => task.status === "ARCHIVED").length;
+  const pipelineCounts = PIPELINE_FILTERS.filter(
+    (pipeline): pipeline is PipelineKey => pipeline !== "ALL",
+  ).map((pipelineKey) => ({
+    count: tasks.filter((task) => task.plan.idea.pipelineKey === pipelineKey).length,
+    pipeline: pipelineDefinitionForKey(pipelineKey),
+  }));
   const visibleSections =
     query.taskView === "focus"
       ? taskBoardSections.filter((section) => section.title === "Active")
@@ -591,6 +617,32 @@ export function TaskBoard({
         </Link>
       </div>
 
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <Link
+          href={buildTaskHref(query, { taskPipeline: "ALL" })}
+          className={
+            query.taskPipeline === "ALL"
+              ? "rounded-xl border border-violet-500/40 bg-violet-500/20 px-3 py-2 font-semibold text-violet-100"
+              : "rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-semibold text-zinc-300 hover:bg-zinc-800"
+          }
+        >
+          All pipelines
+        </Link>
+        {pipelineCounts.map(({ count, pipeline }) => (
+          <Link
+            key={pipeline.key}
+            href={buildTaskHref(query, { taskPipeline: pipeline.key })}
+            className={
+              query.taskPipeline === pipeline.key
+                ? "rounded-xl border border-violet-500/40 bg-violet-500/20 px-3 py-2 font-semibold text-violet-100"
+                : "rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-semibold text-zinc-300 hover:bg-zinc-800"
+            }
+          >
+            {pipeline.label} <span className="text-zinc-500">{count}</span>
+          </Link>
+        ))}
+      </div>
+
       <form className="mt-4 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))_auto]">
         {query.q && <input type="hidden" name="q" value={query.q} />}
         {query.status !== "ALL" && (
@@ -599,6 +651,9 @@ export function TaskBoard({
         {query.archived && <input type="hidden" name="archived" value="1" />}
         {query.taskView !== "all" && (
           <input type="hidden" name="taskView" value={query.taskView} />
+        )}
+        {query.taskPipeline !== "ALL" && (
+          <input type="hidden" name="taskPipeline" value={query.taskPipeline} />
         )}
         <input
           name="taskQ"
@@ -650,6 +705,7 @@ export function TaskBoard({
               taskStatus: "ALL",
               taskPriority: "ALL",
               taskLabel: "ALL",
+              taskPipeline: "ALL",
               taskView: "all",
             })}
             className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 lg:whitespace-nowrap"
@@ -666,6 +722,11 @@ export function TaskBoard({
         {query.taskView === "focus" && (
           <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-blue-100">
             Showing active work only
+          </span>
+        )}
+        {query.taskPipeline !== "ALL" && (
+          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-violet-100">
+            {pipelineDefinitionForKey(query.taskPipeline).pipelineName}
           </span>
         )}
       </div>

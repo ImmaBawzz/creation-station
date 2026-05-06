@@ -7,9 +7,14 @@ import { db } from "@/lib/db";
 import {
   buildIntelligenceRecommendations,
   detectIdeaRoute,
-  type IdeaRoute,
   type IntelligenceRecommendation,
 } from "@/lib/intelligence";
+import {
+  PIPELINE_FILTERS,
+  pipelineDefinitionForKey,
+  type PipelineFilter,
+  type PipelineKey,
+} from "@/lib/pipelines";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
 import { TASK_LABELS } from "@/lib/task-labels";
 import {
@@ -31,7 +36,9 @@ type HomeProps = {
     taskStatus?: string;
     taskPriority?: string;
     taskLabel?: string;
+    taskPipeline?: string;
     taskView?: string;
+    pipeline?: string;
   }>;
 };
 
@@ -75,11 +82,11 @@ const recommendationToneClasses: Record<IntelligenceRecommendation["tone"], stri
   stale: "border-amber-500/25 bg-amber-500/10 text-amber-100",
 };
 
-const routeBadgeClasses: Record<IdeaRoute["id"], string> = {
+const routeBadgeClasses: Record<PipelineKey, string> = {
   game: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
   general: "border-zinc-700 bg-zinc-900 text-zinc-300",
   music: "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-100",
-  systems: "border-blue-500/25 bg-blue-500/10 text-blue-100",
+  automation: "border-blue-500/25 bg-blue-500/10 text-blue-100",
   visual: "border-cyan-500/25 bg-cyan-500/10 text-cyan-100",
 };
 
@@ -101,6 +108,12 @@ function cleanTaskPriority(value: string | undefined): string {
 
 function cleanTaskLabel(value: string | undefined): string {
   return taskLabels.includes(value ?? "") ? value ?? "ALL" : "ALL";
+}
+
+function cleanPipelineFilter(value: string | undefined): PipelineFilter {
+  return PIPELINE_FILTERS.includes(value as PipelineFilter)
+    ? (value as PipelineFilter)
+    : "ALL";
 }
 
 function cleanTaskView(value: string | undefined): "all" | "focus" {
@@ -130,8 +143,13 @@ function IdeaRouteBadge({
 }
 
 function AiRecommendationPanel({
+  pipelineCounts,
   recommendations,
 }: {
+  pipelineCounts: Array<{
+    count: number;
+    pipeline: ReturnType<typeof pipelineDefinitionForKey>;
+  }>;
   recommendations: IntelligenceRecommendation[];
 }) {
   if (recommendations.length === 0) {
@@ -150,6 +168,17 @@ function AiRecommendationPanel({
         <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
           {recommendations.length} signals
         </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        {pipelineCounts.map(({ count, pipeline }) => (
+          <span
+            key={pipeline.key}
+            className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300"
+          >
+            {pipeline.label} <span className="text-zinc-500">{count}</span>
+          </span>
+        ))}
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -172,10 +201,12 @@ function AiRecommendationPanel({
 
 function buildInboxHref({
   archived,
+  pipeline,
   q,
   status,
 }: {
   archived?: boolean;
+  pipeline: PipelineFilter;
   q: string;
   status: string;
 }): string {
@@ -187,6 +218,10 @@ function buildInboxHref({
 
   if (status !== "ALL") {
     params.set("status", status);
+  }
+
+  if (pipeline !== "ALL") {
+    params.set("pipeline", pipeline);
   }
 
   if (archived) {
@@ -204,6 +239,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const selectedStatus = ideaStatusFilters.includes(messages.status ?? "")
     ? messages.status ?? "ALL"
     : "ALL";
+  const selectedPipeline = cleanPipelineFilter(messages.pipeline);
   const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
   const taskBoardQuery: TaskBoardQuery = {
     q: searchQuery,
@@ -213,16 +249,19 @@ export default async function Home({ searchParams }: HomeProps) {
     taskStatus: cleanTaskStatus(messages.taskStatus),
     taskPriority: cleanTaskPriority(messages.taskPriority),
     taskLabel: cleanTaskLabel(messages.taskLabel),
+    taskPipeline: cleanPipelineFilter(messages.taskPipeline),
     taskView: cleanTaskView(messages.taskView),
   };
   const archiveToggleHref = showArchived
     ? buildInboxHref({
         archived: false,
+        pipeline: selectedPipeline,
         q: searchQuery,
         status: selectedStatus === "ARCHIVED" ? "ALL" : selectedStatus,
       })
     : buildInboxHref({
         archived: true,
+        pipeline: selectedPipeline,
         q: searchQuery,
         status: selectedStatus,
       });
@@ -240,11 +279,17 @@ export default async function Home({ searchParams }: HomeProps) {
   });
 
   const filteredIdeas = ideas.filter((idea) => {
+    const route = detectIdeaRoute(idea);
+
     if (!showArchived && idea.status === "ARCHIVED") {
       return false;
     }
 
     if (selectedStatus !== "ALL" && idea.status !== selectedStatus) {
+      return false;
+    }
+
+    if (selectedPipeline !== "ALL" && route.id !== selectedPipeline) {
       return false;
     }
 
@@ -290,10 +335,26 @@ export default async function Home({ searchParams }: HomeProps) {
       },
     },
   });
+  const tasksWithPipeline = tasks.map((task) => ({
+    ...task,
+    plan: {
+      ...task.plan,
+      idea: {
+        ...task.plan.idea,
+        pipelineKey: detectIdeaRoute(task.plan.idea).id,
+      },
+    },
+  }));
+  const pipelineCounts = PIPELINE_FILTERS.filter(
+    (pipeline): pipeline is PipelineKey => pipeline !== "ALL",
+  ).map((pipelineKey) => ({
+    count: ideas.filter((idea) => detectIdeaRoute(idea).id === pipelineKey).length,
+    pipeline: pipelineDefinitionForKey(pipelineKey),
+  }));
   const intelligenceRecommendations = buildIntelligenceRecommendations({
     ideas,
     reviewPlans,
-    tasks,
+    tasks: tasksWithPipeline,
   });
 
   return (
@@ -326,7 +387,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
           {ideas.length === 0 && <FirstUseOnboarding />}
 
-          <AiRecommendationPanel recommendations={intelligenceRecommendations} />
+          <AiRecommendationPanel
+            pipelineCounts={pipelineCounts}
+            recommendations={intelligenceRecommendations}
+          />
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -425,6 +489,18 @@ export default async function Home({ searchParams }: HomeProps) {
                     </option>
                   ))}
                 </select>
+                <select
+                  name="pipeline"
+                  defaultValue={selectedPipeline}
+                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                >
+                  <option value="ALL">All pipelines</option>
+                  {pipelineCounts.map(({ pipeline }) => (
+                    <option key={pipeline.key} value={pipeline.key}>
+                      {pipeline.label}
+                    </option>
+                  ))}
+                </select>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
                 <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-end">
                   <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-28 sm:whitespace-nowrap">
@@ -438,6 +514,27 @@ export default async function Home({ searchParams }: HomeProps) {
                   </Link>
                 </div>
               </form>
+
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                {pipelineCounts.map(({ count, pipeline }) => (
+                  <Link
+                    key={pipeline.key}
+                    href={buildInboxHref({
+                      archived: showArchived,
+                      pipeline: pipeline.key,
+                      q: searchQuery,
+                      status: selectedStatus,
+                    })}
+                    className={
+                      selectedPipeline === pipeline.key
+                        ? "rounded-xl border border-violet-500/40 bg-violet-500/20 px-3 py-2 font-semibold text-violet-100"
+                        : "rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-semibold text-zinc-300 hover:bg-zinc-800"
+                    }
+                  >
+                    {pipeline.label} <span className="text-zinc-500">{count}</span>
+                  </Link>
+                ))}
+              </div>
 
               <div className="mt-5 space-y-4">
                 {filteredIdeas.length === 0 && (
@@ -674,7 +771,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
           </div>
 
-          <TaskBoard query={taskBoardQuery} tasks={tasks as BoardTask[]} />
+          <TaskBoard query={taskBoardQuery} tasks={tasksWithPipeline as BoardTask[]} />
         </section>
       </div>
     </main>
