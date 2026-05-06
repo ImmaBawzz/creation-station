@@ -375,12 +375,12 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               </div>
 
-              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(150px,190px)_auto]">
+              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <input
                   name="q"
                   defaultValue={searchQuery}
                   placeholder="Search title, raw text, tags, or summary"
-                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500"
+                  className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-purple-500 sm:col-span-2"
                 />
                 <select
                   name="status"
@@ -394,13 +394,13 @@ export default async function Home({ searchParams }: HomeProps) {
                   ))}
                 </select>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row lg:justify-end">
-                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-28">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 sm:min-w-28 sm:whitespace-nowrap">
                     Apply Filters
                   </button>
                   <Link
                     href="/"
-                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 sm:min-w-24"
+                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 sm:min-w-24 sm:whitespace-nowrap"
                   >
                     Clear
                   </Link>
