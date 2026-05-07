@@ -5,6 +5,14 @@ import {
 } from "@/lib/autonomy/task-runner";
 import { validateTaskChain } from "@/lib/autonomy/validator";
 import { createAutonomyLogEvent, type AutonomyLogEvent } from "@/lib/autonomy/logger";
+import {
+  buildRunLedger,
+  type RunLedgerEntry,
+  type RunLedgerResult,
+} from "@/lib/autonomy/run-ledger";
+import { routeExecution, type ExecutionRouteResult } from "@/lib/autonomy/execution-router";
+import { simulateRollback, type RollbackSimulationResult } from "@/lib/autonomy/rollback-manager";
+import type { ApprovalDecision } from "@/lib/autonomy/approval-gate";
 
 export type AutonomyTaskAction =
   | "goal_review"
@@ -42,6 +50,15 @@ export type AutonomySimulationDashboard = {
   validatorWarnings: string[];
 };
 
+export type AutonomyControlledExecution = {
+  runLedger: RunLedgerResult;
+  executionHistory: RunLedgerEntry[];
+  approvalQueue: RunLedgerEntry[];
+  rollbackQueue: RollbackSimulationResult[];
+  executionRoutes: ExecutionRouteResult[];
+  executionLogs: AutonomyLogEvent[];
+};
+
 export type AutonomyPlan = {
   goal: string;
   mode: "observer";
@@ -51,6 +68,7 @@ export type AutonomyPlan = {
   executionPreview: AutonomyExecutionPreview[];
   logs: AutonomyLogEvent[];
   simulationDashboard: AutonomySimulationDashboard;
+  controlledExecution: AutonomyControlledExecution;
   stopPolicy: ReturnType<typeof enforceStopPolicy>;
   approvalRequired: true;
   summary: string;
@@ -61,6 +79,8 @@ export type OrchestratorInput = {
   revision?: string;
   policy?: Partial<AutonomyPolicy>;
   simulation?: AutonomySimulationOptions;
+  approvalDecision?: ApprovalDecision;
+  approvalToken?: string;
 };
 
 function normalizeText(value: string): string {
@@ -144,6 +164,7 @@ function buildObserverTasks(goalSummary: string): AutonomyTask[] {
 
 export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan {
   const goalSummary = buildGoalSummary(input.goal, input.revision);
+  const runId = slugTaskId(0, goalSummary || "autonomy-preview-run");
   const tasks = buildObserverTasks(goalSummary);
   const validation = validateTaskChain(tasks);
   const simulation = simulateTaskExecution(tasks, validation, input.simulation);
@@ -168,6 +189,36 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
       }),
     );
   }
+
+  const runLedger = buildRunLedger({
+    approvalDecision: input.approvalDecision,
+    approvalToken: input.approvalToken,
+    executionPreview: simulation.previews,
+    runId,
+    stopPolicy,
+    tasks,
+    validation,
+  });
+  const executionRoutes = runLedger.entries.map((entry) => routeExecution(entry));
+  const rollbackQueue = runLedger.entries
+    .filter(
+      (entry) =>
+        entry.executionState === "failed" ||
+        entry.executionState === "blocked" ||
+        entry.executionState === "rollback_triggered",
+    )
+    .map((entry) => simulateRollback(entry.rollbackReference));
+  const executionLogs = [
+    ...logs,
+    ...executionRoutes.flatMap((route) => route.logs),
+    ...runLedger.recoveryMessages.map((message) =>
+      createAutonomyLogEvent({
+        event: "validation_blocked",
+        message,
+        metadata: { recovered: true },
+      }),
+    ),
+  ];
 
   const currentTask =
     simulation.previews.find((preview) => preview.simulatedStatus === "would_run") ?? null;
@@ -201,6 +252,16 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
       validatorWarnings: validation.warnings.map(
         (warning) => `${warning.taskId}: ${warning.reason}`,
       ),
+    },
+    controlledExecution: {
+      runLedger,
+      executionHistory: runLedger.entries,
+      approvalQueue: runLedger.entries.filter(
+        (entry) => entry.approvalState === "pending" || entry.approvalState === "stale",
+      ),
+      rollbackQueue,
+      executionRoutes,
+      executionLogs,
     },
     stopPolicy,
     approvalRequired: true,

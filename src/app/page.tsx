@@ -44,6 +44,7 @@ type HomeProps = {
     autonomyGoal?: string;
     autonomyRevision?: string;
     autonomyDecision?: string;
+    autonomyApprovalToken?: string;
   }>;
 };
 
@@ -132,8 +133,8 @@ function cleanTaskView(value: string | undefined): "all" | "focus" {
   return value === "focus" ? "focus" : "all";
 }
 
-function cleanAutonomyDecision(value: string | undefined): "approved" | "rejected" | "" {
-  return value === "approved" || value === "rejected" ? value : "";
+function cleanAutonomyDecision(value: string | undefined): "approve" | "reject" | "" {
+  return value === "approve" || value === "reject" ? value : "";
 }
 
 function ideaStage(status: string): "Archived" | "Converted" | "New" | "Reviewing" {
@@ -351,16 +352,114 @@ function AutonomySimulationDashboard({ plan }: { plan: AutonomyPlan }) {
   );
 }
 
+function ControlledExecutionPanel({ plan }: { plan: AutonomyPlan }) {
+  const execution = plan.controlledExecution;
+  const approvalQueue = execution.approvalQueue;
+  const rollbackQueue = execution.rollbackQueue;
+  const routeLabels = execution.executionRoutes.map((route) => route.route);
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="font-semibold text-zinc-100">Controlled Execution Foundation</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Ledger, approval, rollback, and router state are simulated only.
+          </p>
+        </div>
+        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+          {execution.executionHistory.length} ledger entries
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Execution History</p>
+          <div className="mt-2 max-h-48 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {execution.executionHistory.map((entry) => (
+              <div key={`${entry.runId}-${entry.taskId}`} className="rounded-lg bg-zinc-950 p-2">
+                <p className="text-zinc-200">{entry.taskPayload.title}</p>
+                <p>Approval: {entry.approvalState}</p>
+                <p>Execution: {entry.executionState}</p>
+                <p>Stop: {entry.stopEngineResult.stopReason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Approval Queue</p>
+          <div className="mt-2 max-h-48 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {approvalQueue.length > 0 ? (
+              approvalQueue.map((entry) => (
+                <div key={entry.taskId} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="text-zinc-200">{entry.taskPayload.title}</p>
+                  <p>Expires: {entry.approvalExpiresAt}</p>
+                  <p>Token: {entry.approvalToken}</p>
+                </div>
+              ))
+            ) : (
+              <p>No pending approval items.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Rollback Queue</p>
+          <div className="mt-2 max-h-48 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {rollbackQueue.length > 0 ? (
+              rollbackQueue.map((rollback) => (
+                <div key={rollback.rollbackId} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="text-zinc-200">{rollback.status}</p>
+                  <p>{rollback.message}</p>
+                </div>
+              ))
+            ) : (
+              <p>No rollback simulations queued.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Execution Logs</p>
+          <div className="mt-2 max-h-48 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {execution.executionLogs.map((log, index) => (
+              <div key={`${log.event}-${log.taskId ?? index}`} className="rounded-lg bg-zinc-950 p-2">
+                <p className="text-zinc-200">{log.event}</p>
+                <p>{log.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-400">
+        Routes: {routeLabels.length > 0 ? routeLabels.join(", ") : "simulation"}
+      </p>
+    </div>
+  );
+}
+
 function AutonomyPreviewMode({
+  approvalToken,
   decision,
   goal,
   revision,
 }: {
-  decision: "approved" | "rejected" | "";
+  approvalToken: string;
+  decision: "approve" | "reject" | "";
   goal: string;
   revision: string;
 }) {
-  const plan = goal ? orchestrateAutonomyGoal({ goal, revision }) : null;
+  const plan = goal
+    ? orchestrateAutonomyGoal({
+        approvalDecision: decision,
+        approvalToken,
+        goal,
+        revision,
+      })
+    : null;
+  const nextApproval = plan?.controlledExecution.approvalQueue[0] ?? null;
 
   return (
     <section
@@ -400,12 +499,12 @@ function AutonomyPreviewMode({
       {decision && (
         <div
           className={
-            decision === "approved"
+            decision === "approve"
               ? "mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-100"
               : "mt-4 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-100"
           }
         >
-          {decision === "approved"
+          {decision === "approve"
             ? "Preview approved for review tracking only. Observer mode still did not execute any tasks."
             : "Preview rejected. No task execution or production mutation occurred."}
         </div>
@@ -432,6 +531,8 @@ function AutonomyPreviewMode({
           <AutonomyValidationSummary plan={plan} />
 
           <AutonomySimulationDashboard plan={plan} />
+
+          <ControlledExecutionPanel plan={plan} />
 
           <div className="grid gap-3 lg:grid-cols-2">
             {plan.tasks.map((task) => (
@@ -494,9 +595,16 @@ function AutonomyPreviewMode({
             <form>
               <input type="hidden" name="autonomyGoal" value={goal} />
               {revision && <input type="hidden" name="autonomyRevision" value={revision} />}
+              {nextApproval && (
+                <input
+                  type="hidden"
+                  name="autonomyApprovalToken"
+                  value={nextApproval.approvalToken}
+                />
+              )}
               <button
                 name="autonomyDecision"
-                value="approved"
+                value="approve"
                 className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold hover:bg-emerald-500"
               >
                 Approve Preview
@@ -507,7 +615,7 @@ function AutonomyPreviewMode({
               {revision && <input type="hidden" name="autonomyRevision" value={revision} />}
               <button
                 name="autonomyDecision"
-                value="rejected"
+                value="reject"
                 className="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold hover:bg-rose-500"
               >
                 Reject Preview
@@ -577,6 +685,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const autonomyGoal = cleanSearchParam(messages.autonomyGoal);
   const autonomyRevision = cleanSearchParam(messages.autonomyRevision);
   const autonomyDecision = cleanAutonomyDecision(messages.autonomyDecision);
+  const autonomyApprovalToken = cleanSearchParam(messages.autonomyApprovalToken);
   const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
   const taskBoardQuery: TaskBoardQuery = {
     q: searchQuery,
@@ -731,6 +840,7 @@ export default async function Home({ searchParams }: HomeProps) {
           />
 
           <AutonomyPreviewMode
+            approvalToken={autonomyApprovalToken}
             decision={autonomyDecision}
             goal={autonomyGoal}
             revision={autonomyRevision}
