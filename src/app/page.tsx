@@ -239,8 +239,10 @@ function AiRecommendationPanel({
 function AutonomyValidationSummary({ plan }: { plan: AutonomyPlan }) {
   const issues = [
     ...plan.validation.duplicateTasks,
+    ...plan.validation.duplicateExecutionAttempts,
     ...plan.validation.invalidTasks,
     ...plan.validation.invalidChains,
+    ...plan.validation.unsafeExecutionRequests,
   ];
 
   if (issues.length === 0 && plan.stopPolicy.canContinue) {
@@ -264,6 +266,87 @@ function AutonomyValidationSummary({ plan }: { plan: AutonomyPlan }) {
           <li key={message}>{message}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function AutonomySimulationDashboard({ plan }: { plan: AutonomyPlan }) {
+  const dashboard = plan.simulationDashboard;
+  const dashboardStats = [
+    { label: "Queued", value: dashboard.queuedTasks.length },
+    { label: "Failed", value: dashboard.failedTasks.length },
+    { label: "Blocked", value: dashboard.blockedTasks.length },
+    { label: "Warnings", value: dashboard.validatorWarnings.length },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="font-semibold text-zinc-100">Simulation Dashboard</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Read-only simulation state derived from the current preview.
+          </p>
+        </div>
+        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+          Stop reason: {dashboard.stopReason}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {dashboardStats.map((stat) => (
+          <div key={stat.label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="text-xs text-zinc-500">{stat.label}</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-100">{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
+          <p className="font-medium text-zinc-100">Current Task</p>
+          <p className="mt-2 text-zinc-400">
+            {dashboard.currentTask?.taskTitle ?? "No runnable simulated task selected"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
+          <p className="font-medium text-zinc-100">Queued Tasks</p>
+          <p className="mt-2 text-zinc-400">
+            {dashboard.queuedTasks.length > 0
+              ? dashboard.queuedTasks.map((task) => task.taskTitle).join(", ")
+              : "No queued simulated tasks"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
+          <p className="font-medium text-zinc-100">Failed Tasks</p>
+          <p className="mt-2 text-zinc-400">
+            {dashboard.failedTasks.length > 0
+              ? dashboard.failedTasks.map((task) => task.taskTitle).join(", ")
+              : "No simulated failures"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
+          <p className="font-medium text-zinc-100">Blocked Tasks</p>
+          <p className="mt-2 text-zinc-400">
+            {dashboard.blockedTasks.length > 0
+              ? dashboard.blockedTasks.map((task) => task.taskTitle).join(", ")
+              : "No blocked simulated tasks"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm">
+        <p className="font-medium text-zinc-100">Validator Warnings</p>
+        {dashboard.validatorWarnings.length > 0 ? (
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-zinc-400">
+            {dashboard.validatorWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-zinc-400">No validator warnings for this preview.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -348,6 +431,8 @@ function AutonomyPreviewMode({
 
           <AutonomyValidationSummary plan={plan} />
 
+          <AutonomySimulationDashboard plan={plan} />
+
           <div className="grid gap-3 lg:grid-cols-2">
             {plan.tasks.map((task) => (
               <article
@@ -386,6 +471,24 @@ function AutonomyPreviewMode({
               ))}
             </div>
           </div>
+
+          <details className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+            <summary className="cursor-pointer list-none font-semibold text-zinc-100">
+              Structured Simulation Logs
+            </summary>
+            <div className="mt-3 grid gap-2">
+              {plan.logs.map((log, index) => (
+                <div
+                  key={`${log.event}-${log.taskId ?? "run"}-${index}`}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-300"
+                >
+                  <p className="font-semibold text-zinc-100">{log.event}</p>
+                  <p className="mt-1">{log.message}</p>
+                  {log.taskId && <p className="mt-1 text-zinc-500">Task: {log.taskId}</p>}
+                </div>
+              ))}
+            </div>
+          </details>
 
           <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr]">
             <form>

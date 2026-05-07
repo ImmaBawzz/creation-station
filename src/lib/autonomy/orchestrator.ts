@@ -1,6 +1,10 @@
 import { enforceStopPolicy, type AutonomyPolicy } from "@/lib/autonomy/stop-engine";
-import { simulateTaskExecution } from "@/lib/autonomy/task-runner";
+import {
+  simulateTaskExecution,
+  type AutonomySimulationOptions,
+} from "@/lib/autonomy/task-runner";
 import { validateTaskChain } from "@/lib/autonomy/validator";
+import { createAutonomyLogEvent, type AutonomyLogEvent } from "@/lib/autonomy/logger";
 
 export type AutonomyTaskAction =
   | "goal_review"
@@ -23,9 +27,19 @@ export type AutonomyTask = {
 export type AutonomyExecutionPreview = {
   taskId: string;
   taskTitle: string;
-  simulatedStatus: "would_run" | "blocked";
+  simulatedStatus: "would_run" | "blocked" | "completed" | "failed" | "stalled" | "rolled_back";
   preview: string;
   mutationRisk: "none";
+  rollbackPreview: string;
+};
+
+export type AutonomySimulationDashboard = {
+  currentTask: AutonomyExecutionPreview | null;
+  queuedTasks: AutonomyExecutionPreview[];
+  failedTasks: AutonomyExecutionPreview[];
+  blockedTasks: AutonomyExecutionPreview[];
+  stopReason: string;
+  validatorWarnings: string[];
 };
 
 export type AutonomyPlan = {
@@ -35,6 +49,8 @@ export type AutonomyPlan = {
   executionOrder: string[];
   validation: ReturnType<typeof validateTaskChain>;
   executionPreview: AutonomyExecutionPreview[];
+  logs: AutonomyLogEvent[];
+  simulationDashboard: AutonomySimulationDashboard;
   stopPolicy: ReturnType<typeof enforceStopPolicy>;
   approvalRequired: true;
   summary: string;
@@ -44,6 +60,7 @@ export type OrchestratorInput = {
   goal: string;
   revision?: string;
   policy?: Partial<AutonomyPolicy>;
+  simulation?: AutonomySimulationOptions;
 };
 
 function normalizeText(value: string): string {
@@ -129,16 +146,43 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
   const goalSummary = buildGoalSummary(input.goal, input.revision);
   const tasks = buildObserverTasks(goalSummary);
   const validation = validateTaskChain(tasks);
-  const executionPreview = simulateTaskExecution(tasks, validation);
+  const simulation = simulateTaskExecution(tasks, validation, input.simulation);
   const stopPolicy = enforceStopPolicy({
     policy: input.policy,
     runState: {
+      agentState: "validating",
       elapsedMs: 0,
       iterationCount: tasks.length,
       retryCountByTaskId: new Map(tasks.map((task) => [task.id, 0])),
       visitedTaskIds: tasks.map((task) => task.id),
     },
   });
+  const logs = [...simulation.logs];
+
+  if (!stopPolicy.canContinue) {
+    logs.push(
+      createAutonomyLogEvent({
+        event: "stop_engine_intervention_triggered",
+        message: "Stop engine blocked continuation.",
+        metadata: { stopReason: stopPolicy.stopReason },
+      }),
+    );
+  }
+
+  const currentTask =
+    simulation.previews.find((preview) => preview.simulatedStatus === "would_run") ?? null;
+  const queuedTasks = currentTask
+    ? simulation.previews.filter(
+        (preview) =>
+          preview.taskId !== currentTask.taskId && preview.simulatedStatus === "would_run",
+      )
+    : [];
+  const failedTasks = simulation.previews.filter(
+    (preview) => preview.simulatedStatus === "failed",
+  );
+  const blockedTasks = simulation.previews.filter(
+    (preview) => preview.simulatedStatus === "blocked" || preview.simulatedStatus === "stalled",
+  );
 
   return {
     goal: goalSummary,
@@ -146,7 +190,18 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
     tasks,
     executionOrder: tasks.map((task) => task.id),
     validation,
-    executionPreview,
+    executionPreview: simulation.previews,
+    logs,
+    simulationDashboard: {
+      currentTask,
+      queuedTasks,
+      failedTasks,
+      blockedTasks,
+      stopReason: stopPolicy.stopReason,
+      validatorWarnings: validation.warnings.map(
+        (warning) => `${warning.taskId}: ${warning.reason}`,
+      ),
+    },
     stopPolicy,
     approvalRequired: true,
     summary:

@@ -1,21 +1,30 @@
 export type StopReason =
   | "none"
+  | "invalid_agent_state"
   | "max_iterations"
+  | "stalled_task"
   | "retry_cap"
   | "timeout"
   | "recursion_prevention";
 
 export type AutonomyPolicy = {
   maxIterations: number;
+  maxRecursionDepth: number;
   maxRetriesPerTask: number;
+  maxStalledMs: number;
+  maxStateRecoveryAttempts: number;
   timeoutMs: number;
   maxTaskRevisits: number;
 };
 
 export type AutonomyRunState = {
+  agentState?: string;
   elapsedMs: number;
   iterationCount: number;
+  recursionDepth?: number;
+  recoveryAttemptCount?: number;
   retryCountByTaskId: Map<string, number>;
+  stalledTaskMsByTaskId?: Map<string, number>;
   visitedTaskIds: string[];
 };
 
@@ -28,10 +37,24 @@ export type StopPolicyResult = {
 
 export const DEFAULT_AUTONOMY_POLICY: AutonomyPolicy = {
   maxIterations: 5,
+  maxRecursionDepth: 2,
   maxRetriesPerTask: 2,
+  maxStalledMs: 5_000,
+  maxStateRecoveryAttempts: 1,
   timeoutMs: 10_000,
   maxTaskRevisits: 1,
 };
+
+const validAgentStates = new Set([
+  undefined,
+  "idle",
+  "goal_selected",
+  "plan_ready",
+  "observing",
+  "validating",
+  "blocked",
+  "stopped",
+]);
 
 export function enforceStopPolicy({
   policy,
@@ -44,10 +67,25 @@ export function enforceStopPolicy({
   const messages: string[] = [];
   let stopReason: StopReason = "none";
 
+  if (
+    !validAgentStates.has(runState.agentState) ||
+    (runState.recoveryAttemptCount ?? 0) > resolvedPolicy.maxStateRecoveryAttempts
+  ) {
+    stopReason = "invalid_agent_state";
+    messages.push("Invalid agent state detected; observer-mode recovery must stop.");
+  }
+
   if (runState.iterationCount > resolvedPolicy.maxIterations) {
-    stopReason = "max_iterations";
+    stopReason = stopReason === "none" ? "max_iterations" : stopReason;
     messages.push(
       `Iteration count ${runState.iterationCount} exceeds limit ${resolvedPolicy.maxIterations}.`,
+    );
+  }
+
+  if ((runState.recursionDepth ?? 0) > resolvedPolicy.maxRecursionDepth) {
+    stopReason = stopReason === "none" ? "recursion_prevention" : stopReason;
+    messages.push(
+      `Recursion depth ${runState.recursionDepth ?? 0} exceeds limit ${resolvedPolicy.maxRecursionDepth}.`,
     );
   }
 
@@ -56,6 +94,15 @@ export function enforceStopPolicy({
       stopReason = stopReason === "none" ? "retry_cap" : stopReason;
       messages.push(
         `Task ${taskId} retry count ${retryCount} exceeds limit ${resolvedPolicy.maxRetriesPerTask}.`,
+      );
+    }
+  }
+
+  for (const [taskId, stalledMs] of runState.stalledTaskMsByTaskId?.entries() ?? []) {
+    if (stalledMs > resolvedPolicy.maxStalledMs) {
+      stopReason = stopReason === "none" ? "stalled_task" : stopReason;
+      messages.push(
+        `Task ${taskId} stalled for ${stalledMs}ms, exceeding limit ${resolvedPolicy.maxStalledMs}ms.`,
       );
     }
   }
