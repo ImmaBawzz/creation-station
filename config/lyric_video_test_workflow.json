@@ -1,0 +1,62 @@
+{
+  "project_name": "creation_station_mvp",
+  "audio_file": "input/audio/test_song.mp3",
+  "lyrics_file": "input/lyrics/test_lyrics.txt",
+  "start_image": "",
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "fps": 30,
+  "output_format": "mp4",
+  "visual_style": "controlled cinematic placeholders with text-safe lower-third composition",
+  "visual_source": "auto",
+  "scene_count": 4,
+  "scene_duration_strategy": "even",
+  "lyric_overlay_enabled": true,
+  "font": {
+    "family": "Arial",
+    "size": 58,
+    "color": "#FFFFFF",
+    "outline_color": "#000000",
+    "outline_width": 3,
+    "shadow": 1,
+    "margin_v": 96,
+    "max_chars_per_line": 42
+  },
+  "render_settings": {
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "audio_bitrate": "192k",
+    "crf": 20,
+    "preset": "medium",
+    "transition": "cut",
+    "temp_dir": "output/temp"
+  },
+  "scenes": [
+    {
+      "name": "Opening pulse",
+      "color": "#101820",
+      "accent_color": "#5EEAD4",
+      "motion": "slow_drift"
+    },
+    {
+      "name": "Verse drift",
+      "color": "#1D2B53",
+      "accent_color": "#F4D35E",
+      "motion": "soft_pan"
+    },
+    {
+      "name": "Chorus lift",
+      "color": "#2F184B",
+      "accent_color": "#F15BB5",
+      "motion": "slow_zoom"
+    },
+    {
+      "name": "Final glow",
+      "color": "#0B3D2E",
+      "accent_color": "#FF9F1C",
+      "motion": "gentle_orbit"
+    }
+  ]
+}
