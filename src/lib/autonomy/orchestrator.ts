@@ -12,6 +12,10 @@ import {
 } from "@/lib/autonomy/run-ledger";
 import { routeExecution, type ExecutionRouteResult } from "@/lib/autonomy/execution-router";
 import { simulateRollback, type RollbackSimulationResult } from "@/lib/autonomy/rollback-manager";
+import {
+  buildExecutionKernelPreview,
+  type ExecutionKernelPreview,
+} from "@/lib/autonomy/execution-kernel";
 import type { ApprovalDecision } from "@/lib/autonomy/approval-gate";
 
 export type AutonomyTaskAction =
@@ -69,6 +73,7 @@ export type AutonomyPlan = {
   logs: AutonomyLogEvent[];
   simulationDashboard: AutonomySimulationDashboard;
   controlledExecution: AutonomyControlledExecution;
+  executionKernel: ExecutionKernelPreview;
   stopPolicy: ReturnType<typeof enforceStopPolicy>;
   approvalRequired: true;
   summary: string;
@@ -219,6 +224,7 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
       }),
     ),
   ];
+  const executionKernel = buildExecutionKernelPreview();
 
   const currentTask =
     simulation.previews.find((preview) => preview.simulatedStatus === "would_run") ?? null;
@@ -263,6 +269,7 @@ export function orchestrateAutonomyGoal(input: OrchestratorInput): AutonomyPlan 
       executionRoutes,
       executionLogs,
     },
+    executionKernel,
     stopPolicy,
     approvalRequired: true,
     summary:

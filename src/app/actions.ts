@@ -2,6 +2,7 @@
 
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { logAnalyticsEvent } from "@/lib/analytics";
+import { buildMusicVideoPipelinePlan } from "@/lib/creative-execution";
 import { db } from "@/lib/db";
 import { serializeTaskLabels, taskLabelsForApprovedAction } from "@/lib/task-labels";
 import { cookies } from "next/headers";
@@ -320,6 +321,73 @@ export async function archiveIdea(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function createMusicVideoPipeline(formData: FormData) {
+  const title = clean(formData.get("title"));
+  const concept = clean(formData.get("concept"));
+  const genre = clean(formData.get("genre"));
+  const mood = clean(formData.get("mood"));
+  const styleReferences = clean(formData.get("styleReferences"));
+  const durationSeconds = Number(clean(formData.get("durationSeconds")));
+
+  if (!title || !concept) {
+    throw new Error("Music video title and concept are required.");
+  }
+
+  const pipelinePlan = buildMusicVideoPipelinePlan({
+    concept,
+    durationSeconds,
+    genre,
+    mood,
+    styleReferences,
+    title,
+  });
+
+  const idea = await db.idea.create({
+    data: {
+      category: "Music",
+      rawText: [
+        concept,
+        genre ? `Genre: ${genre}` : "",
+        mood ? `Mood: ${mood}` : "",
+        styleReferences ? `Style references: ${styleReferences}` : "",
+      ].filter(Boolean).join("\n"),
+      status: "PLAN_READY",
+      summary: pipelinePlan.summary,
+      tags: "music video, v2.5, creative execution",
+      title,
+    },
+  });
+
+  const plan = await db.factoryPlan.create({
+    data: {
+      concept: pipelinePlan.concept,
+      ideaId: idea.id,
+      nextActions: pipelinePlan.nextActions,
+      requiredAssets: pipelinePlan.requiredAssets,
+      risks: pipelinePlan.risks,
+      status: "REVIEW_PENDING",
+      summary: pipelinePlan.summary,
+      title: pipelinePlan.title,
+    },
+  });
+
+  await logAnalyticsEvent("idea_created", {
+    ideaId: idea.id,
+  });
+  await logAnalyticsEvent("project_created", {
+    ideaId: idea.id,
+    projectId: plan.id,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/execution");
+  const params = new URLSearchParams({
+    factorySuccess: "Music video pipeline created. Review the prompt pack and execution steps below.",
+    pipeline: "music",
+  });
+  redirect(`/?${params.toString()}#review-inbox`);
+}
+
 export async function updateTaskStatus(formData: FormData) {
   const taskId = clean(formData.get("taskId"));
   const nextStatus = clean(formData.get("nextStatus"));
@@ -512,4 +580,31 @@ export async function restoreRollbackSnapshot(formData: FormData) {
   const runId = await restoreTaskRollbackSnapshotById(snapshotId);
   revalidatePath("/");
   redirect(`/?autonomyRunId=${encodeURIComponent(runId)}#autonomy-preview`);
+}
+
+export async function submitSampleExecutionRequest() {
+  const { createExecutionRequest } = await import("@/lib/autonomy/execution-request-store");
+
+  await createExecutionRequest({
+    actionType: "file_write",
+    payload: {
+      content: "Creation Station worker output\n",
+      path: "output/worker-live-output.txt",
+    },
+    taskId: "ui-sample",
+  });
+
+  revalidatePath("/");
+  redirect("/?autonomyGoal=Build%20v2.1%20adapter%20layer#autonomy-preview");
+}
+
+export async function runExecutionWorkerOnce() {
+  const { processNextExecutionRequest } = await import("@/lib/autonomy/execution-worker");
+
+  await processNextExecutionRequest({
+    workerId: "creation-station-ui-worker",
+  });
+
+  revalidatePath("/");
+  redirect("/?autonomyGoal=Build%20v2.1%20adapter%20layer#autonomy-preview");
 }

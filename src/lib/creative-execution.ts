@@ -5,6 +5,7 @@ import {
   mkdir,
   readFile,
   rename,
+  rm,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -68,7 +69,16 @@ export type MusicVideoBuilderOutput = {
   releaseFiles: string[];
   releasePackageDir: string;
   renderedVideoPath: string;
+  thumbnailPath: string;
 };
+
+export type MusicVideoBuilderStage =
+  | "queued"
+  | "rendering"
+  | "merging"
+  | "packaging"
+  | "completed"
+  | "failed";
 
 type FetchLike = typeof fetch;
 
@@ -90,6 +100,13 @@ function sanitizeFilePart(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "asset";
+}
+
+function visualInputKind(filePath: string): "image" | "video" {
+  const extension = path.extname(filePath).toLowerCase();
+  return [".avif", ".jpeg", ".jpg", ".png", ".webp"].includes(extension)
+    ? "image"
+    : "video";
 }
 
 async function assertExecutable(filePath: string, label: string): Promise<void> {
@@ -121,6 +138,12 @@ async function assertReadableFile(filePath: string, label: string): Promise<void
     }
 
     throw new Error(`${label} is missing: ${filePath}`);
+  }
+}
+
+function assertWorkflow(workflow: Record<string, unknown>): void {
+  if (!workflow || Object.keys(workflow).length === 0) {
+    throw new Error("ComfyUI workflow is required.");
   }
 }
 
@@ -499,6 +522,33 @@ export class FFmpegAdapter {
     ], outputPath);
   }
 
+  async extractThumbnail({
+    inputPath,
+    outputPath,
+  }: {
+    inputPath: string;
+    outputPath: string;
+  }): Promise<{ outputPath: string; stderr: string; stdout: string }> {
+    await Promise.all([
+      assertExecutable(this.ffmpegPath, "FFmpeg"),
+      assertReadableFile(inputPath, "Final render"),
+      ensureParentDirectory(outputPath),
+    ]);
+
+    return this.run([
+      "-y",
+      "-ss",
+      "00:00:01",
+      "-i",
+      inputPath,
+      "-frames:v",
+      "1",
+      "-q:v",
+      "2",
+      outputPath,
+    ], outputPath);
+  }
+
   async loopVisuals({
     durationSeconds,
     inputKind = "video",
@@ -682,32 +732,71 @@ export class AssetPipelineAdapter {
   }
 
   async prepareReleasePackage({
+    metadata,
     manifest,
     projectDir,
     promptPack,
+    promptText,
     renderPath,
+    thumbnailPath,
+    workflow,
   }: {
+    metadata?: Record<string, unknown>;
     manifest: Record<string, unknown>;
     projectDir: string;
     promptPack: CreativePromptPack;
+    promptText?: string;
     renderPath: string;
+    thumbnailPath?: string;
+    workflow?: Record<string, unknown>;
   }): Promise<{ files: string[]; releaseDir: string }> {
     await assertReadableFile(renderPath, "Final render");
     const releaseDir = path.join(projectDir, "release");
     await mkdir(releaseDir, { recursive: true });
 
-    const finalRenderPath = path.join(releaseDir, `final-render${path.extname(renderPath)}`);
+    const finalRenderPath = path.join(releaseDir, `final.mp4`);
+    const thumbnailReleasePath = path.join(releaseDir, "thumbnail.jpg");
+    const workflowPath = path.join(releaseDir, "workflow.json");
+    const promptTextPath = path.join(releaseDir, "prompt.txt");
+    const metadataPath = path.join(releaseDir, "metadata.json");
     const promptPackPath = path.join(releaseDir, "prompt-pack.json");
     const manifestPath = path.join(releaseDir, "manifest.json");
 
+    await copyFile(renderPath, finalRenderPath);
+
+    if (thumbnailPath) {
+      await copyFile(thumbnailPath, thumbnailReleasePath);
+    } else {
+      await writeFile(thumbnailReleasePath, Buffer.from("thumbnail unavailable"));
+    }
+
     await Promise.all([
-      copyFile(renderPath, finalRenderPath),
+      writeFile(workflowPath, JSON.stringify(workflow ?? {}, null, 2), "utf8"),
+      writeFile(
+        promptTextPath,
+        promptText ?? [
+          promptPack.videoPrompts[0],
+          promptPack.imagePrompts[0],
+          promptPack.sunoPrompt,
+          promptPack.udioPrompt,
+        ].filter(Boolean).join("\n\n"),
+        "utf8",
+      ),
+      writeFile(metadataPath, JSON.stringify(metadata ?? manifest, null, 2), "utf8"),
       writeFile(promptPackPath, JSON.stringify(promptPack, null, 2), "utf8"),
       writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8"),
     ]);
 
     return {
-      files: [finalRenderPath, promptPackPath, manifestPath],
+      files: [
+        finalRenderPath,
+        thumbnailReleasePath,
+        workflowPath,
+        promptTextPath,
+        metadataPath,
+        promptPackPath,
+        manifestPath,
+      ],
       releaseDir,
     };
   }
@@ -717,6 +806,7 @@ export async function runMusicVideoBuilderV1({
   adapters,
   config,
   input,
+  onStage,
 }: {
   adapters?: {
     assets?: AssetPipelineAdapter;
@@ -725,11 +815,13 @@ export async function runMusicVideoBuilderV1({
   };
   config?: CreativeRuntimeConfig;
   input: MusicVideoBuilderInput;
+  onStage?: (stage: MusicVideoBuilderStage) => Promise<void> | void;
 }): Promise<MusicVideoBuilderOutput> {
   const runtimeConfig = config ?? await loadCreativeRuntimeConfig();
   const assets = adapters?.assets ?? new AssetPipelineAdapter();
   const comfyui = adapters?.comfyui ?? new ComfyUIAdapter({ baseUrl: runtimeConfig.comfyuiUrl });
   const ffmpeg = adapters?.ffmpeg ?? new FFmpegAdapter({ ffmpegPath: runtimeConfig.ffmpegPath });
+  assertWorkflow(input.workflow);
   const promptPack = generateCreativePrompts({
     concept: input.visualPrompt,
     durationSeconds: input.durationSeconds,
@@ -745,6 +837,7 @@ export async function runMusicVideoBuilderV1({
     await assertReadableFile(input.sourceImagePath, "Source image");
   }
 
+  await onStage?.("rendering");
   const submit = await comfyui.submitWorkflow({ workflow: input.workflow });
   await comfyui.monitorJobCompletion({ promptId: submit.promptId });
   const [firstOutput] = await comfyui.retrieveOutputs(submit.promptId);
@@ -757,14 +850,29 @@ export async function runMusicVideoBuilderV1({
     output: firstOutput,
     targetPath: path.join(projectFolders.comfyui, firstOutput.filename),
   });
+  const loopedVisualPath = path.join(projectFolders.temp, "looped-visual.mp4");
   const finalMp4Path = path.join(projectFolders.renders, "final.mp4");
 
-  await ffmpeg.exportFinalRender({
-    audioPath: input.audioPath,
-    durationSeconds: input.durationSeconds,
-    outputPath: finalMp4Path,
-    visualPath: renderedVideoPath,
-  });
+  await onStage?.("merging");
+  try {
+    await ffmpeg.loopVisuals({
+      durationSeconds: asPositiveDuration(input.durationSeconds),
+      inputKind: visualInputKind(renderedVideoPath),
+      outputPath: loopedVisualPath,
+      visualPath: renderedVideoPath,
+    });
+    await ffmpeg.mergeAudioVideo({
+      audioPath: input.audioPath,
+      outputPath: finalMp4Path,
+      videoPath: loopedVisualPath,
+    });
+  } catch (error) {
+    await recoverFailedRender({
+      outputPath: finalMp4Path,
+      reason: error instanceof Error ? error.message : "FFmpeg merge failed.",
+    });
+    throw error;
+  }
 
   const validation = await ffmpeg.validateExport({
     minBytes: 12,
@@ -779,7 +887,31 @@ export async function runMusicVideoBuilderV1({
     throw new Error(`Final MP4 validation failed: ${validation.errors.join(" ")}`);
   }
 
+  await onStage?.("packaging");
+  const thumbnailPath = path.join(projectFolders.renders, "thumbnail.jpg");
+  let packageThumbnailPath: string | undefined = thumbnailPath;
+  try {
+    await ffmpeg.extractThumbnail({
+      inputPath: finalMp4Path,
+      outputPath: thumbnailPath,
+    });
+  } catch {
+    await rm(thumbnailPath, { force: true });
+    packageThumbnailPath = undefined;
+  }
+
   const release = await assets.prepareReleasePackage({
+    metadata: {
+      audioPath: input.audioPath,
+      durationSeconds: input.durationSeconds ?? null,
+      finalMp4Path,
+      loopedVisualPath,
+      promptId: submit.promptId,
+      renderedVideoPath,
+      sourceImagePath: input.sourceImagePath ?? null,
+      title: input.title,
+      visualPrompt: input.visualPrompt,
+    },
     manifest: {
       audioPath: input.audioPath,
       comfyuiOutput: firstOutput,
@@ -790,8 +922,17 @@ export async function runMusicVideoBuilderV1({
     },
     projectDir: path.dirname(projectFolders.release),
     promptPack,
+    promptText: [
+      `Visual prompt: ${input.visualPrompt}`,
+      `Video prompt: ${promptPack.videoPrompts[0]}`,
+      `Image prompt: ${promptPack.imagePrompts[0]}`,
+      `Audio prompt: ${promptPack.sunoPrompt}`,
+    ].join("\n\n"),
     renderPath: finalMp4Path,
+    thumbnailPath: packageThumbnailPath,
+    workflow: input.workflow,
   });
+  await onStage?.("completed");
 
   return {
     finalMp4Path,
@@ -799,6 +940,7 @@ export async function runMusicVideoBuilderV1({
     releaseFiles: release.files,
     releasePackageDir: release.releaseDir,
     renderedVideoPath,
+    thumbnailPath,
   };
 }
 

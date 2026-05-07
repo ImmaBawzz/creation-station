@@ -146,6 +146,57 @@ model RollbackSnapshot {
   @@index([targetPath])
 }
 
+model ExecutionRequest {
+  id                 String    @id @default(cuid())
+  taskId             String    @map("task_id")
+  actionType         String    @map("action_type")
+  payload            String
+  status             String    @default("pending")
+  approvalStatus     String    @default("approved") @map("approval_status")
+  rollbackSnapshotId String?   @map("rollback_snapshot_id")
+  rollbackPayload    String    @default("") @map("rollback_payload")
+  executionHash      String    @unique @map("execution_hash")
+  workerId           String?   @map("worker_id")
+  retryCount         Int       @default(0) @map("retry_count")
+  maxRetries         Int       @default(2) @map("max_retries")
+  result             String    @default("")
+  error              String    @default("")
+  auditLog           String    @default("[]") @map("audit_log")
+  claimedAt          DateTime? @map("claimed_at")
+  completedAt        DateTime? @map("completed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([workerId])
+  @@index([createdAt])
+  @@map("execution_requests")
+}
+
+model ExecutionWorker {
+  id                  String    @id
+  actionType          String    @map("action_type")
+  status              String    @default("idle")
+  healthState         String    @default("healthy") @map("health_state")
+  lastHeartbeatAt     DateTime  @default(now()) @map("last_heartbeat_at")
+  currentRequestId    String?   @map("current_request_id")
+  processedCount      Int       @default(0) @map("processed_count")
+  failedCount         Int       @default(0) @map("failed_count")
+  staleRecoveredCount Int       @default(0) @map("stale_recovered_count")
+  shutdownRequested   Boolean   @default(false) @map("shutdown_requested")
+  startedAt           DateTime  @default(now()) @map("started_at")
+  stoppedAt           DateTime? @map("stopped_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([actionType])
+  @@index([status])
+  @@index([healthState])
+  @@index([lastHeartbeatAt])
+  @@map("execution_workers")
+}
+
 model FactoryPlan {
   id             String   @id @default(cuid())
   ideaId         String

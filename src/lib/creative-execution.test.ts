@@ -199,10 +199,184 @@ describe("creative execution layer", () => {
       });
       const releaseFiles = await readdir(release.releaseDir);
 
-      expect(release.files).toHaveLength(3);
+      expect(release.files).toHaveLength(7);
       expect(releaseFiles).toEqual(
-        expect.arrayContaining(["final-render.mp4", "manifest.json", "prompt-pack.json"]),
+        expect.arrayContaining([
+          "final.mp4",
+          "manifest.json",
+          "metadata.json",
+          "prompt-pack.json",
+          "prompt.txt",
+          "thumbnail.jpg",
+          "workflow.json",
+        ]),
       );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects Music Video Builder requests with missing audio", async () => {
+    const root = tempWorkspace();
+
+    try {
+      await expect(
+        runMusicVideoBuilderV1({
+          config: {
+            comfyuiUrl: "http://127.0.0.1:8188",
+            ffmpegPath: "ffmpeg",
+            outputDirectory: root,
+          },
+          input: {
+            audioPath: path.join(root, "source", "missing.wav"),
+            title: "Signal Fire",
+            visualPrompt: "Neon stage performance",
+            workflow: { test: true },
+          },
+        }),
+      ).rejects.toThrow("Audio input is missing");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects Music Video Builder requests with missing workflow", async () => {
+    const root = tempWorkspace();
+    const audioPath = path.join(root, "source", "audio.wav");
+
+    try {
+      mkdirSync(path.dirname(audioPath), { recursive: true });
+      writeFileSync(audioPath, "audio", "utf8");
+
+      await expect(
+        runMusicVideoBuilderV1({
+          config: {
+            comfyuiUrl: "http://127.0.0.1:8188",
+            ffmpegPath: "ffmpeg",
+            outputDirectory: root,
+          },
+          input: {
+            audioPath,
+            title: "Signal Fire",
+            visualPrompt: "Neon stage performance",
+            workflow: {},
+          },
+        }),
+      ).rejects.toThrow("ComfyUI workflow is required");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("reports failed ComfyUI renders from Music Video Builder", async () => {
+    const root = tempWorkspace();
+    const audioPath = path.join(root, "source", "audio.wav");
+    const comfyui = new ComfyUIAdapter({
+      fetchImpl: async (url, init) => {
+        const target = String(url);
+
+        if (target.endsWith("/prompt") && init?.method === "POST") {
+          return new Response(JSON.stringify({ prompt_id: "prompt-failed" }));
+        }
+
+        if (target.includes("/history/prompt-failed")) {
+          return new Response(
+            JSON.stringify({
+              "prompt-failed": {
+                status: { status_str: "error" },
+              },
+            }),
+          );
+        }
+
+        return new Response("not found", { status: 404 });
+      },
+    });
+
+    try {
+      mkdirSync(path.dirname(audioPath), { recursive: true });
+      writeFileSync(audioPath, "audio", "utf8");
+
+      await expect(
+        runMusicVideoBuilderV1({
+          adapters: { comfyui },
+          config: {
+            comfyuiUrl: "http://127.0.0.1:8188",
+            ffmpegPath: "ffmpeg",
+            outputDirectory: root,
+          },
+          input: {
+            audioPath,
+            title: "Signal Fire",
+            visualPrompt: "Neon stage performance",
+            workflow: { test: true },
+          },
+        }),
+      ).rejects.toThrow("ComfyUI job failed: prompt-failed");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("reports failed FFmpeg merges from Music Video Builder", async () => {
+    const root = tempWorkspace();
+    const audioPath = path.join(root, "source", "audio.wav");
+    const comfyui = new ComfyUIAdapter({
+      fetchImpl: async (url, init) => {
+        const target = String(url);
+
+        if (target.endsWith("/prompt") && init?.method === "POST") {
+          return new Response(JSON.stringify({ prompt_id: "prompt-merge-failed" }));
+        }
+
+        if (target.includes("/history/prompt-merge-failed")) {
+          return new Response(
+            JSON.stringify({
+              "prompt-merge-failed": {
+                outputs: {
+                  "9": {
+                    videos: [{ filename: "visual.mp4", subfolder: "", type: "output" }],
+                  },
+                },
+                status: { completed: true },
+              },
+            }),
+          );
+        }
+
+        if (target.includes("/view?")) {
+          return new Response(Buffer.from("....ftypmp42visual"));
+        }
+
+        return new Response("not found", { status: 404 });
+      },
+    });
+    const ffmpeg = new FFmpegAdapter({
+      executor: async () => {
+        throw new Error("merge failed");
+      },
+    });
+
+    try {
+      mkdirSync(path.dirname(audioPath), { recursive: true });
+      writeFileSync(audioPath, "audio", "utf8");
+
+      await expect(
+        runMusicVideoBuilderV1({
+          adapters: { comfyui, ffmpeg },
+          config: {
+            comfyuiUrl: "http://127.0.0.1:8188",
+            ffmpegPath: "ffmpeg",
+            outputDirectory: root,
+          },
+          input: {
+            audioPath,
+            title: "Signal Fire",
+            visualPrompt: "Neon stage performance",
+            workflow: { test: true },
+          },
+        }),
+      ).rejects.toThrow("FFmpeg render failed: merge failed");
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

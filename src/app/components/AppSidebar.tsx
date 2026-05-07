@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 type AppSidebarProps = {
-  active: "dashboard" | "inbox" | "factory" | "settings" | "release";
+  active: "dashboard" | "execution" | "factory" | "inbox" | "release" | "settings";
   title: string;
   subtitle: string;
   showBackup?: boolean;
@@ -11,6 +11,7 @@ const navItems = [
   { key: "dashboard", href: "/dashboard", label: "Dashboard" },
   { key: "inbox", href: "/", label: "Inbox" },
   { key: "factory", href: "/factory", label: "Factory Planner" },
+  { key: "execution", href: "/execution", label: "Execution Layer" },
   { key: "settings", href: "/settings", label: "Settings" },
   { key: "release", href: "/release", label: "Release Checklist" },
 ] as const;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppSidebar } from "@/app/components/AppSidebar";
+import { ExecutionModeControls } from "@/app/components/ExecutionModeControls";
 import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
@@ -28,8 +29,11 @@ import {
   requestRevision,
   releaseAutonomyLocks,
   restoreRollbackSnapshot,
+  runExecutionWorkerOnce,
   sendToFactory,
+  submitSampleExecutionRequest,
 } from "./actions";
+import { listWorkerRuntimeMonitor } from "@/lib/autonomy/execution-worker";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -110,6 +114,13 @@ const ideaStageClasses: Record<string, string> = {
   Reviewing: "border-blue-500/25 bg-blue-500/10 text-blue-100",
 };
 
+const actionRiskClasses: Record<string, string> = {
+  high: "border-rose-500/30 bg-rose-500/10 text-rose-100",
+  low: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100",
+  medium: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+  unknown: "border-zinc-700 bg-zinc-900 text-zinc-300",
+};
+
 type PersistedRunView = {
   id: string;
   createdAt: Date;
@@ -167,6 +178,39 @@ type ActiveLockView = {
   owner: string;
   runId: string | null;
   status: string;
+};
+
+type ExecutionRequestView = {
+  actionType: string;
+  approvalStatus: string;
+  completedAt: Date | null;
+  createdAt: Date;
+  error: string;
+  executionHash: string;
+  id: string;
+  maxRetries: number;
+  result: string;
+  retryCount: number;
+  rollbackSnapshotId: string | null;
+  status: string;
+  taskId: string;
+  workerId: string | null;
+};
+
+type WorkerRuntimeMonitorView = {
+  activeWorkers: Array<{
+    currentRequestId: string | null;
+    failedCount: number;
+    healthState: string;
+    id: string;
+    lastHeartbeatAt: Date;
+    processedCount: number;
+    staleRecoveredCount: number;
+    status: string;
+  }>;
+  failedJobs: number;
+  jobThroughput: number;
+  staleJobs: number;
 };
 
 function cleanSearchParam(value: string | undefined): string {
@@ -422,7 +466,7 @@ function ControlledExecutionPanel({ plan }: { plan: AutonomyPlan }) {
   const execution = plan.controlledExecution;
   const approvalQueue = execution.approvalQueue;
   const rollbackQueue = execution.rollbackQueue;
-  const routeLabels = execution.executionRoutes.map((route) => route.route);
+  const routeLabels = [...new Set(execution.executionRoutes.map((route) => route.route))];
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
@@ -490,7 +534,7 @@ function ControlledExecutionPanel({ plan }: { plan: AutonomyPlan }) {
           <p className="font-medium text-zinc-100">Execution Logs</p>
           <div className="mt-2 max-h-48 space-y-2 overflow-y-auto text-xs text-zinc-400">
             {execution.executionLogs.map((log, index) => (
-              <div key={`${log.event}-${log.taskId ?? index}`} className="rounded-lg bg-zinc-950 p-2">
+              <div key={`${log.event}-${log.taskId ?? "run"}-${index}`} className="rounded-lg bg-zinc-950 p-2">
                 <p className="text-zinc-200">{log.event}</p>
                 <p>{log.message}</p>
               </div>
@@ -502,6 +546,326 @@ function ControlledExecutionPanel({ plan }: { plan: AutonomyPlan }) {
       <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-400">
         Routes: {routeLabels.length > 0 ? routeLabels.join(", ") : "simulation"}
       </p>
+    </div>
+  );
+}
+
+function ExecutionKernelPanel({
+  executionRequests,
+  plan,
+  workerMonitor,
+}: {
+  executionRequests: ExecutionRequestView[];
+  plan: AutonomyPlan;
+  workerMonitor: WorkerRuntimeMonitorView;
+}) {
+  const kernel = plan.executionKernel;
+  const adapters = kernel.toolAdapters;
+  const queue = kernel.queue.items;
+  const activeItems = queue.filter((item) =>
+    ["approval_pending", "manual_override_required", "retry_scheduled"].includes(item.status),
+  );
+  const completedItems = queue.filter((item) => item.status === "auto_simulated");
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="font-semibold text-zinc-100">Execution Kernel v2.0</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Central registry, sandbox validation, queue policy, recovery, and approvals.
+          </p>
+        </div>
+        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100">
+          {kernel.trustBoundary.replace("_", " ")}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {(["low", "medium", "high"] as const).map((risk) => (
+          <div key={risk} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="text-xs text-zinc-500">{risk} risk</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-100">
+              {kernel.riskSummary[risk]}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <ExecutionModeControls liveUnlock={adapters.liveUnlock} />
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Workspace Capabilities</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {Object.entries(adapters.capabilities).map(([capability, enabled]) => (
+              <span
+                key={capability}
+                className={
+                  enabled
+                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-semibold text-emerald-100"
+                    : "rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 font-semibold text-zinc-400"
+                }
+              >
+                {capability}: {enabled ? "on" : "off"}
+              </span>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-zinc-500">
+            Writable dirs: {adapters.writableDirectories.join(", ")}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Action Registry</p>
+          <div className="mt-2 grid gap-2 text-xs text-zinc-400">
+            {kernel.registry.map((action) => (
+              <div key={action.type} className="rounded-lg bg-zinc-950 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-zinc-200">{action.label}</p>
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${actionRiskClasses[action.riskLevel]}`}
+                  >
+                    {action.riskLevel}
+                  </span>
+                </div>
+                <p className="mt-1">Approval: {action.approvalRequirement}</p>
+                <p>Timeout: {action.timeoutMs}ms · Retries: {action.retryLimit}</p>
+                <p>Rollback: {action.rollbackBehavior.strategy}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Execution Queue Viewer</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Active high-risk slot: {kernel.queue.activeHighRiskActionId ?? "none"}
+          </p>
+          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {queue.map((item) => (
+              <div key={item.id} className="rounded-lg bg-zinc-950 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-zinc-200">{item.label}</p>
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${actionRiskClasses[item.riskLevel]}`}
+                  >
+                    {item.riskLevel}
+                  </span>
+                </div>
+                <p className="mt-1">Status: {item.status}</p>
+                <p>{item.reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Pending Approval Records</p>
+          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {kernel.queue.approvalRequests.length > 0 ? (
+              kernel.queue.approvalRequests.map((approval) => (
+                <div key={approval.idempotencyKey} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="font-semibold text-zinc-200">{approval.actionType}</p>
+                  <p>Action: {approval.actionId}</p>
+                  <p>Status: {approval.status}</p>
+                  <p className="break-all">Key: {approval.idempotencyKey}</p>
+                  {approval.reusedByActionIds.length > 0 && (
+                    <p>Reused by: {approval.reusedByActionIds.join(", ")}</p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p>No pending approval records.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Execution History</p>
+          <div className="mt-2 grid gap-2 text-xs text-zinc-400">
+            <p>{completedItems.length} auto-simulated actions completed.</p>
+            <p>{activeItems.length} actions are waiting on approval, manual override, or retry.</p>
+            {kernel.sandboxViolations.length > 0 ? (
+              kernel.sandboxViolations.map((violation) => (
+                <div key={violation.actionId} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="font-semibold text-zinc-200">{violation.actionId}</p>
+                  <p>{violation.reasons.join(" ")}</p>
+                </div>
+              ))
+            ) : (
+              <p>No sandbox violations in the default preview.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Rollback Controls</p>
+          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {kernel.queue.rollbackControls.map((control) => (
+              <div key={control.actionId} className="rounded-lg bg-zinc-950 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-zinc-200">{control.actionId}</p>
+                  <button
+                    disabled
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-zinc-500"
+                  >
+                    {control.enabled ? "Ready" : "Not needed"}
+                  </button>
+                </div>
+                <p className="mt-1">{control.summary}</p>
+              </div>
+            ))}
+            {kernel.queue.failureLogs.map((log) => (
+              <div key={log.actionId} className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-100">
+                <p className="font-semibold">{log.actionId}</p>
+                <p>{log.message}</p>
+                <p>Retry {log.retryCount} of {log.retryLimit}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Adapter Command Whitelist</p>
+          <div className="mt-2 grid gap-2 text-xs text-zinc-400">
+            {adapters.commandWhitelist.map((command) => (
+              <code key={command} className="rounded-lg bg-zinc-950 px-3 py-2">
+                {command}
+              </code>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Execution Logs Viewer</p>
+          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {adapters.auditLog.map((entry) => (
+              <div key={`${entry.timestamp}-${entry.action}`} className="rounded-lg bg-zinc-950 p-2">
+                <p className="font-semibold text-zinc-200">{entry.action}</p>
+                <p>Actor: {entry.actor}</p>
+                <p>Result: {entry.result}</p>
+                <p>Rollback: {entry.rollbackId ?? "none"}</p>
+                <p>{entry.timestamp}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 lg:col-span-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium text-zinc-100">Worker Execution Queue</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                UI enqueues requests; the backend worker claims and executes approved jobs.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <form action={submitSampleExecutionRequest}>
+                <button className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+                  Queue Output Write
+                </button>
+              </form>
+              <form action={runExecutionWorkerOnce}>
+                <button className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500">
+                  Run Worker Once
+                </button>
+              </form>
+            </div>
+          </div>
+          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {executionRequests.length > 0 ? (
+              executionRequests.map((request) => (
+                <div key={request.id} className="rounded-lg bg-zinc-950 p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-zinc-200">{request.actionType}</p>
+                    <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-zinc-300">
+                      {request.status}
+                    </span>
+                  </div>
+                  <p>Approval: {request.approvalStatus}</p>
+                  <p>Worker: {request.workerId ?? "unclaimed"}</p>
+                  <p>
+                    Retries: {request.retryCount}/{request.maxRetries}
+                  </p>
+                  <p>Rollback: {request.rollbackSnapshotId ?? "none"}</p>
+                  <p className="break-all">Hash: {request.executionHash}</p>
+                  {request.result && <p className="text-emerald-200">{request.result}</p>}
+                  {request.error && <p className="text-amber-200">{request.error}</p>}
+                  <p>{request.createdAt.toISOString()}</p>
+                </div>
+              ))
+            ) : (
+              <p>No worker execution requests yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 lg:col-span-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium text-zinc-100">Persistent Worker Runtime</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Daemon heartbeat, throughput, stale recovery, and shutdown state.
+              </p>
+            </div>
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs text-zinc-300">
+              npm run worker:daemon
+            </span>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg bg-zinc-950 p-3">
+              <p className="text-[11px] uppercase text-zinc-500">Active workers</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-100">
+                {workerMonitor.activeWorkers.length}
+              </p>
+            </div>
+            <div className="rounded-lg bg-zinc-950 p-3">
+              <p className="text-[11px] uppercase text-zinc-500">Throughput</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-100">
+                {workerMonitor.jobThroughput}
+              </p>
+            </div>
+            <div className="rounded-lg bg-zinc-950 p-3">
+              <p className="text-[11px] uppercase text-zinc-500">Failed jobs</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-100">
+                {workerMonitor.failedJobs}
+              </p>
+            </div>
+            <div className="rounded-lg bg-zinc-950 p-3">
+              <p className="text-[11px] uppercase text-zinc-500">Stale jobs</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-100">
+                {workerMonitor.staleJobs}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {workerMonitor.activeWorkers.length > 0 ? (
+              workerMonitor.activeWorkers.map((worker) => (
+                <div key={worker.id} className="rounded-lg bg-zinc-950 p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-zinc-200">{worker.id}</p>
+                    <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-zinc-300">
+                      {worker.status} / {worker.healthState}
+                    </span>
+                  </div>
+                  <p>Current job: {worker.currentRequestId ?? "none"}</p>
+                  <p>
+                    Processed: {worker.processedCount} · Failed: {worker.failedCount} · Stale recovered:{" "}
+                    {worker.staleRecoveredCount}
+                  </p>
+                  <p>Heartbeat: {worker.lastHeartbeatAt.toISOString()}</p>
+                </div>
+              ))
+            ) : (
+              <p>No persistent workers have checked in yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -694,19 +1058,23 @@ function AutonomyPreviewMode({
   activeLocks,
   decision,
   duplicateBlocked,
+  executionRequests,
   goal,
   persistedRun,
   recentRuns,
   revision,
+  workerMonitor,
 }: {
   activeLocks: ActiveLockView[];
   approvalToken: string;
   decision: "approve" | "reject" | "";
   duplicateBlocked: boolean;
+  executionRequests: ExecutionRequestView[];
   goal: string;
   persistedRun: PersistedRunView | null;
   recentRuns: RecentRunView[];
   revision: string;
+  workerMonitor: WorkerRuntimeMonitorView;
 }) {
   const plan = goal
     ? orchestrateAutonomyGoal({
@@ -810,6 +1178,12 @@ function AutonomyPreviewMode({
           <AutonomySimulationDashboard plan={plan} />
 
           <ControlledExecutionPanel plan={plan} />
+
+          <ExecutionKernelPanel
+            executionRequests={executionRequests}
+            plan={plan}
+            workerMonitor={workerMonitor}
+          />
 
           <div className="grid gap-3 lg:grid-cols-2">
             {plan.tasks.map((task) => (
@@ -1082,7 +1456,7 @@ export default async function Home({ searchParams }: HomeProps) {
     reviewPlans,
     tasks: tasksWithPipeline,
   });
-  const [persistedRun, recentRuns, activeLocks] = await Promise.all([
+  const [persistedRun, recentRuns, activeLocks, executionRequests, workerMonitor] = await Promise.all([
     autonomyRunId
       ? db.run.findUnique({
           where: { id: autonomyRunId },
@@ -1120,6 +1494,11 @@ export default async function Home({ searchParams }: HomeProps) {
       orderBy: { expiresAt: "asc" },
       take: 8,
     }),
+    db.executionRequest.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    listWorkerRuntimeMonitor(),
   ]);
 
   return (
@@ -1162,10 +1541,12 @@ export default async function Home({ searchParams }: HomeProps) {
             approvalToken={autonomyApprovalToken}
             decision={autonomyDecision}
             duplicateBlocked={autonomyDuplicateBlocked}
+            executionRequests={executionRequests}
             goal={autonomyGoal}
             persistedRun={persistedRun}
             recentRuns={recentRuns}
             revision={autonomyRevision}
+            workerMonitor={workerMonitor}
           />
 
           <div
