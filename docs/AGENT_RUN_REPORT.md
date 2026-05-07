@@ -2,97 +2,84 @@
 
 ## Date
 
-2026-05-05
+2026-05-07
 
 ## Branch
 
-`polish-v0-5-1`
+`master`
 
 ## Mission
 
-Stabilize Creation Station v0.5.1 without adding new systems.
+Plan and create one complete existing-scope workflow from start to finish without adding a new subsystem.
 
 ## Files Changed
 
-- `src/app/page.tsx`
-- `src/app/factory/page.tsx`
-- `src/lib/status-ui.ts`
-- `src/lib/aiProvider.ts`
+- `src/lib/music-video-workflows.ts`
+- `src/app/execution/MusicVideoBuilderPanel.tsx`
+- `src/lib/music-video-workflows.test.ts`
 - `docs/AGENT_RUN_REPORT.md`
 
 ## Commands Run
 
 ```powershell
-git branch --show-current
 git status --short --branch
-git checkout -b polish-v0-5-1
-npm install
+Get-ChildItem -Force
+Get-Content -Raw AGENTS.md
+Get-Content -Raw README.md
+Get-Content -Raw ROADMAP.md
+Get-Content -Raw WORKFLOW.md
+Get-Content -Raw docs\scratch\agent-next-input.md
+Get-Content -Raw docs\releases\v1.7.0-alpha.1.md
+Get-Content -Raw docs\planning\v1.6-intelligence-layer-plan.md
+Get-Content -Raw docs\roadmap\v1.5-release-readiness.md
+Get-Content -Raw docs\SCOPE_LOCK.md
+Get-Content -Raw docs\STABILITY_CHECKLIST.md
+npx vitest run src/lib/music-video-workflows.test.ts
+npm run lint
+npx tsc --noEmit
 npx prisma generate
-npx tsc --noEmit
-npm run lint
-npm run dev
-git add .
-git commit -m "Polish status labels"
-npx tsc --noEmit
-npm run lint
-git add .
-git commit -m "Improve empty states"
-npx tsc --noEmit
-npm run lint
-git add .
-git commit -m "Clarify revision flow"
-npx tsc --noEmit
-npm run lint
-git add .
-git commit -m "Improve AI planner error messages"
+npm run test
+npm run build
+Invoke-WebRequest -UseBasicParsing http://localhost:3000/execution -TimeoutSec 20
+npx prisma validate
 ```
 
 ## Results
 
-- [x] `npm install`
-- [x] `npx prisma generate`
-- [x] `npx tsc --noEmit`
+- [x] `npx vitest run src/lib/music-video-workflows.test.ts`
 - [x] `npm run lint`
-- [x] `npm run dev`
+- [x] `npx tsc --noEmit`
+- [x] `npx prisma generate`
+- [x] `npm run test`
+- [x] `npm run build`
+- [x] `npx prisma validate`
 
-## Manual Checks
+## Localhost Verification
 
-- [x] App loads
-- [ ] Create idea works
-- [ ] Send to Factory works
-- [ ] Review Inbox works
-- [ ] Revision loop works
-- [ ] Approval works
-- [ ] Task Board works
+- Existing `node` server was already listening on port `3000`.
+- `http://localhost:3000/execution` returned `200`.
+- Rendered response contained `Lyric To Release` and `End-to-End Music Video Builder`.
 
-## Commits Created
+## Changes Made
 
-- `3144dc6` — `Polish status labels`
-- `28bcf15` — `Improve empty states`
-- `44d8a08` — `Clarify revision flow`
-- `53e9f67` — `Improve AI planner error messages`
+- Added a default `Lyric To Release` music-video workflow preset with six start-to-finish stages:
+  `Song brief`, `Prompt pack`, `Audio upload`, `ComfyUI visual render`, `FFmpeg merge`, and `Release package`.
+- Added stage metadata to existing music-video workflow presets.
+- Updated the Execution Layer builder panel to show the selected workflow description and stage sequence before queueing a package request.
+- Added unit coverage for the default full workflow and prompt hydration behavior.
 
 ## Issues Found
 
-- The shell session initially started outside the git repository and had to be re-run from the project root.
-- Starting a second dev server showed that another Next.js dev server was already running on port 3000. The existing server was reused for smoke checks.
-- The first AI provider patch malformed `src/lib/aiProvider.ts`; it was immediately repaired in the same slice and revalidated successfully.
-
-## Fixes Applied
-
-- Replaced raw status enums with shared human-readable labels and badge styles.
-- Improved empty-state copy for the inboxes, factory panels, and task columns.
-- Clarified the consequences of approval versus revision in the Review Inbox.
-- Improved Ollama error messages for connection failures, missing models, server failures, and malformed planner responses.
+- The shell initially started one directory above the Git repository.
+- Bundled `rg.exe` was blocked by Windows permissions, so PowerShell listing/search was used.
+- `npm run build` passed but repeated the known Turbopack tracing warning for `src/app/api/music-video-builder/[id]/download/route.ts`.
 
 ## Deferred Work
 
-- Full end-to-end QA loop was not rerun three times.
-- No schema changes, architecture changes, or new systems were added.
-- UI-only smoke testing was performed; AI failure cases were improved in code but not manually forced in the browser.
+- Did not change schema, dependencies, routes, queue architecture, or worker behavior.
+- Did not run a real ComfyUI plus FFmpeg render; that still depends on the local creative runtime.
+- Did not address the known Turbopack tracing warning; it remains the documented `v1.7.0-alpha.2` target.
 
-## Recommendation
+## NEXT_AGENT_INPUT
 
-Next human review should focus on:
-- Running the full Idea → Factory → Review → Revision → Approval → Tasks workflow three times in a row using the QA test ideas.
-- Triggering at least one controlled Ollama failure to confirm the new error copy is helpful in normal use.
+Continue from `master` after the full music-video workflow preset slice. Read `docs/releases/v1.7.0-alpha.1.md`, then take the next smallest safe `v1.7.0-alpha.2` step: tighten the music-video download route file tracing or run an end-to-end worker daemon QA pass with local ComfyUI and FFmpeg available.
