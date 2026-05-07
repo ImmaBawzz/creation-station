@@ -3,6 +3,7 @@ import { AppSidebar } from "@/app/components/AppSidebar";
 import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
+import { orchestrateAutonomyGoal, type AutonomyPlan } from "@/lib/autonomy/orchestrator";
 import { db } from "@/lib/db";
 import {
   buildIntelligenceRecommendations,
@@ -40,6 +41,9 @@ type HomeProps = {
     taskProject?: string;
     taskView?: string;
     pipeline?: string;
+    autonomyGoal?: string;
+    autonomyRevision?: string;
+    autonomyDecision?: string;
   }>;
 };
 
@@ -126,6 +130,10 @@ function cleanPipelineFilter(value: string | undefined): PipelineFilter {
 
 function cleanTaskView(value: string | undefined): "all" | "focus" {
   return value === "focus" ? "focus" : "all";
+}
+
+function cleanAutonomyDecision(value: string | undefined): "approved" | "rejected" | "" {
+  return value === "approved" || value === "rejected" ? value : "";
 }
 
 function ideaStage(status: string): "Archived" | "Converted" | "New" | "Reviewing" {
@@ -228,6 +236,200 @@ function AiRecommendationPanel({
   );
 }
 
+function AutonomyValidationSummary({ plan }: { plan: AutonomyPlan }) {
+  const issues = [
+    ...plan.validation.duplicateTasks,
+    ...plan.validation.invalidTasks,
+    ...plan.validation.invalidChains,
+  ];
+
+  if (issues.length === 0 && plan.stopPolicy.canContinue) {
+    return (
+      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+        Preview validation passed. The chain is read-only, ordered, and waiting for a human decision.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-100">
+      <p className="font-semibold">Preview needs attention</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-100/85">
+        {issues.map((issue) => (
+          <li key={`${issue.taskId}-${issue.reason}`}>
+            {issue.taskId}: {issue.reason}
+          </li>
+        ))}
+        {plan.stopPolicy.messages.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AutonomyPreviewMode({
+  decision,
+  goal,
+  revision,
+}: {
+  decision: "approved" | "rejected" | "";
+  goal: string;
+  revision: string;
+}) {
+  const plan = goal ? orchestrateAutonomyGoal({ goal, revision }) : null;
+
+  return (
+    <section
+      id="autonomy-preview"
+      className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl"
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Autonomy Preview Mode</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Observer-mode planning only. Previews do not execute tasks or change production data.
+          </p>
+        </div>
+        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100">
+          Observer only
+        </span>
+      </div>
+
+      <form className="mt-5 grid gap-3">
+        <label className="text-xs font-medium text-zinc-500" htmlFor="autonomy-goal">
+          Goal
+        </label>
+        <textarea
+          id="autonomy-goal"
+          name="autonomyGoal"
+          required
+          defaultValue={goal}
+          placeholder="Describe the high-level goal to preview..."
+          rows={3}
+          className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
+        />
+        <button className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500">
+          Propose Execution Plan
+        </button>
+      </form>
+
+      {decision && (
+        <div
+          className={
+            decision === "approved"
+              ? "mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-100"
+              : "mt-4 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-100"
+          }
+        >
+          {decision === "approved"
+            ? "Preview approved for review tracking only. Observer mode still did not execute any tasks."
+            : "Preview rejected. No task execution or production mutation occurred."}
+        </div>
+      )}
+
+      {plan && (
+        <div className="mt-5 space-y-4">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-300">
+                {plan.tasks.length} proposed tasks
+              </span>
+              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-300">
+                Approval required
+              </span>
+              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-300">
+                Mutation risk: none
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-300">{plan.summary}</p>
+            <p className="mt-2 text-xs text-zinc-500">Goal: {plan.goal}</p>
+          </div>
+
+          <AutonomyValidationSummary plan={plan} />
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {plan.tasks.map((task) => (
+              <article
+                key={task.id}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="font-semibold text-zinc-100">
+                    {task.order}. {task.title}
+                  </h3>
+                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300">
+                    {task.action}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  {task.description}
+                </p>
+                <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-300">
+                  {task.expectedOutput}
+                </p>
+              </article>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+            <h3 className="font-semibold text-zinc-100">Execution Preview</h3>
+            <div className="mt-3 grid gap-2">
+              {plan.executionPreview.map((preview) => (
+                <div
+                  key={preview.taskId}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-300"
+                >
+                  <p className="font-medium text-zinc-100">{preview.taskTitle}</p>
+                  <p className="mt-1 text-xs text-zinc-400">{preview.preview}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr]">
+            <form>
+              <input type="hidden" name="autonomyGoal" value={goal} />
+              {revision && <input type="hidden" name="autonomyRevision" value={revision} />}
+              <button
+                name="autonomyDecision"
+                value="approved"
+                className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold hover:bg-emerald-500"
+              >
+                Approve Preview
+              </button>
+            </form>
+            <form>
+              <input type="hidden" name="autonomyGoal" value={goal} />
+              {revision && <input type="hidden" name="autonomyRevision" value={revision} />}
+              <button
+                name="autonomyDecision"
+                value="rejected"
+                className="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold hover:bg-rose-500"
+              >
+                Reject Preview
+              </button>
+            </form>
+            <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input type="hidden" name="autonomyGoal" value={goal} />
+              <textarea
+                name="autonomyRevision"
+                defaultValue={revision}
+                placeholder="Revise the preview instructions..."
+                rows={2}
+                className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+              <button className="rounded-xl bg-zinc-800 px-4 py-3 text-sm font-semibold text-zinc-200 hover:bg-zinc-700">
+                Revise
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function buildInboxHref({
   archived,
   pipeline,
@@ -269,6 +471,9 @@ export default async function Home({ searchParams }: HomeProps) {
     ? messages.status ?? "ALL"
     : "ALL";
   const selectedPipeline = cleanPipelineFilter(messages.pipeline);
+  const autonomyGoal = cleanSearchParam(messages.autonomyGoal);
+  const autonomyRevision = cleanSearchParam(messages.autonomyRevision);
+  const autonomyDecision = cleanAutonomyDecision(messages.autonomyDecision);
   const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
   const taskBoardQuery: TaskBoardQuery = {
     q: searchQuery,
@@ -420,6 +625,12 @@ export default async function Home({ searchParams }: HomeProps) {
           <AiRecommendationPanel
             pipelineCounts={pipelineCounts}
             recommendations={intelligenceRecommendations}
+          />
+
+          <AutonomyPreviewMode
+            decision={autonomyDecision}
+            goal={autonomyGoal}
+            revision={autonomyRevision}
           />
 
           <div
