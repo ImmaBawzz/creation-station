@@ -21,8 +21,13 @@ import { TASK_LABELS } from "@/lib/task-labels";
 import {
   approvePlan,
   archiveIdea,
+  createAutonomyRun,
   createIdea,
+  decideAutonomyApproval,
+  expireAutonomyLocks,
   requestRevision,
+  releaseAutonomyLocks,
+  restoreRollbackSnapshot,
   sendToFactory,
 } from "./actions";
 
@@ -45,6 +50,8 @@ type HomeProps = {
     autonomyRevision?: string;
     autonomyDecision?: string;
     autonomyApprovalToken?: string;
+    autonomyRunId?: string;
+    autonomyDuplicate?: string;
   }>;
 };
 
@@ -101,6 +108,65 @@ const ideaStageClasses: Record<string, string> = {
   Converted: "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
   New: "border-zinc-700 bg-zinc-900 text-zinc-200",
   Reviewing: "border-blue-500/25 bg-blue-500/10 text-blue-100",
+};
+
+type PersistedRunView = {
+  id: string;
+  createdAt: Date;
+  goal: string;
+  mode: string;
+  stateHash: string;
+  status: string;
+  staleReason: string;
+  stopReason: string;
+  approvals: Array<{
+    id: string;
+    expiresAt: Date;
+    reason: string;
+    status: string;
+    taskId: string;
+    token: string;
+  }>;
+  events: Array<{
+    id: string;
+    createdAt: Date;
+    event: string;
+    message: string;
+    taskId: string | null;
+  }>;
+  locks: Array<{
+    id: string;
+    expiresAt: Date;
+    lockKey: string;
+    releasedAt: Date | null;
+    status: string;
+  }>;
+  rollbackSnapshots: Array<{
+    id: string;
+    createdAt: Date;
+    kind: string;
+    restoredAt: Date | null;
+    restoreReference: string;
+    targetId: string | null;
+    targetPath: string | null;
+  }>;
+};
+
+type RecentRunView = {
+  id: string;
+  createdAt: Date;
+  goal: string;
+  status: string;
+  staleReason: string;
+};
+
+type ActiveLockView = {
+  id: string;
+  expiresAt: Date;
+  lockKey: string;
+  owner: string;
+  runId: string | null;
+  status: string;
 };
 
 function cleanSearchParam(value: string | undefined): string {
@@ -440,15 +506,206 @@ function ControlledExecutionPanel({ plan }: { plan: AutonomyPlan }) {
   );
 }
 
+function PersistentTrustPanel({
+  activeLocks,
+  duplicateBlocked,
+  persistedRun,
+  recentRuns,
+}: {
+  activeLocks: ActiveLockView[];
+  duplicateBlocked: boolean;
+  persistedRun: PersistedRunView | null;
+  recentRuns: RecentRunView[];
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="font-semibold text-zinc-100">Persistence and Trust Layer</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Stored run history, approvals, locks, freshness blocks, and rollback references.
+          </p>
+        </div>
+        <form action={expireAutonomyLocks}>
+          <button className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
+            Expire Old Locks
+          </button>
+        </form>
+      </div>
+
+      {duplicateBlocked && (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+          Duplicate execution was blocked by an active lock. The existing persisted run is shown.
+        </div>
+      )}
+
+      {persistedRun?.status === "stale_blocked" && (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+          <p className="font-semibold">Stale plan blocked</p>
+          <p className="mt-1">{persistedRun.staleReason}</p>
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Persistent Execution History</p>
+          <div className="mt-2 max-h-52 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {recentRuns.length > 0 ? (
+              recentRuns.map((run) => (
+                <Link
+                  key={run.id}
+                  href={`/?autonomyRunId=${encodeURIComponent(run.id)}#autonomy-preview`}
+                  className="block rounded-lg bg-zinc-950 p-2 hover:bg-zinc-800"
+                >
+                  <p className="truncate text-zinc-200">{run.goal}</p>
+                  <p>Status: {run.status}</p>
+                  <p>{run.createdAt.toISOString()}</p>
+                </Link>
+              ))
+            ) : (
+              <p>No persisted runs yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+          <p className="font-medium text-zinc-100">Active Lock Viewer</p>
+          <div className="mt-2 max-h-52 space-y-2 overflow-y-auto text-xs text-zinc-400">
+            {activeLocks.length > 0 ? (
+              activeLocks.map((lock) => (
+                <div key={lock.id} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="truncate text-zinc-200">{lock.lockKey}</p>
+                  <p>Owner: {lock.owner}</p>
+                  <p>Expires: {lock.expiresAt.toISOString()}</p>
+                  {lock.runId && (
+                    <Link
+                      href={`/?autonomyRunId=${encodeURIComponent(lock.runId)}#autonomy-preview`}
+                      className="mt-1 inline-flex text-blue-200 hover:text-blue-100"
+                    >
+                      Open run
+                    </Link>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p>No active locks.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {persistedRun && (
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium text-zinc-100">Approval Records</p>
+                <p className="mt-1 text-xs text-zinc-500">Run: {persistedRun.id}</p>
+              </div>
+              <form action={releaseAutonomyLocks}>
+                <input type="hidden" name="runId" value={persistedRun.id} />
+                <button className="rounded-lg bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">
+                  Release Locks
+                </button>
+              </form>
+            </div>
+            <div className="mt-2 max-h-52 space-y-2 overflow-y-auto text-xs text-zinc-400">
+              {persistedRun.approvals.map((approval) => (
+                <div key={approval.id} className="rounded-lg bg-zinc-950 p-2">
+                  <p className="text-zinc-200">{approval.taskId}</p>
+                  <p>Status: {approval.status}</p>
+                  <p>Expires: {approval.expiresAt.toISOString()}</p>
+                  {approval.status === "pending" && (
+                    <div className="mt-2 flex gap-2">
+                      <form action={decideAutonomyApproval}>
+                        <input type="hidden" name="approvalId" value={approval.id} />
+                        <input type="hidden" name="decision" value="approve" />
+                        <button className="rounded-lg bg-emerald-700 px-2 py-1 font-semibold text-emerald-50 hover:bg-emerald-600">
+                          Approve Record
+                        </button>
+                      </form>
+                      <form action={decideAutonomyApproval}>
+                        <input type="hidden" name="approvalId" value={approval.id} />
+                        <input type="hidden" name="decision" value="reject" />
+                        <button className="rounded-lg bg-rose-700 px-2 py-1 font-semibold text-rose-50 hover:bg-rose-600">
+                          Reject
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="font-medium text-zinc-100">Rollback Restore Panel</p>
+            <div className="mt-2 max-h-52 space-y-2 overflow-y-auto text-xs text-zinc-400">
+              {persistedRun.rollbackSnapshots.length > 0 ? (
+                persistedRun.rollbackSnapshots.slice(0, 12).map((snapshot) => (
+                  <div key={snapshot.id} className="rounded-lg bg-zinc-950 p-2">
+                    <p className="text-zinc-200">{snapshot.restoreReference}</p>
+                    <p>Kind: {snapshot.kind}</p>
+                    <p>{snapshot.restoredAt ? `Restored: ${snapshot.restoredAt.toISOString()}` : "Not restored"}</p>
+                    {snapshot.kind === "task" ? (
+                      <form action={restoreRollbackSnapshot} className="mt-2">
+                        <input type="hidden" name="snapshotId" value={snapshot.id} />
+                        <button className="rounded-lg bg-zinc-800 px-2 py-1 font-semibold text-zinc-200 hover:bg-zinc-700">
+                          Restore Task State
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="mt-2 text-zinc-500">
+                        File snapshot stored as a restoration reference.
+                      </p>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p>No rollback snapshots for this run.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 lg:col-span-2">
+            <p className="font-medium text-zinc-100">Execution Events</p>
+            <div className="mt-2 max-h-44 space-y-2 overflow-y-auto text-xs text-zinc-400">
+              {persistedRun.events.length > 0 ? (
+                persistedRun.events.map((event) => (
+                  <div key={event.id} className="rounded-lg bg-zinc-950 p-2">
+                    <p className="text-zinc-200">{event.event}</p>
+                    <p>{event.message}</p>
+                    <p>{event.createdAt.toISOString()}</p>
+                  </div>
+                ))
+              ) : (
+                <p>No execution events for this run.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AutonomyPreviewMode({
   approvalToken,
+  activeLocks,
   decision,
+  duplicateBlocked,
   goal,
+  persistedRun,
+  recentRuns,
   revision,
 }: {
+  activeLocks: ActiveLockView[];
   approvalToken: string;
   decision: "approve" | "reject" | "";
+  duplicateBlocked: boolean;
   goal: string;
+  persistedRun: PersistedRunView | null;
+  recentRuns: RecentRunView[];
   revision: string;
 }) {
   const plan = goal
@@ -478,7 +735,7 @@ function AutonomyPreviewMode({
         </span>
       </div>
 
-      <form className="mt-5 grid gap-3">
+      <form action={createAutonomyRun} className="mt-5 grid gap-3">
         <label className="text-xs font-medium text-zinc-500" htmlFor="autonomy-goal">
           Goal
         </label>
@@ -491,10 +748,30 @@ function AutonomyPreviewMode({
           rows={3}
           className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
         />
+        <label className="text-xs font-medium text-zinc-500" htmlFor="autonomy-revision">
+          Revision context
+        </label>
+        <textarea
+          id="autonomy-revision"
+          name="autonomyRevision"
+          defaultValue={revision}
+          placeholder="Optional constraints or corrections for this observer run..."
+          rows={2}
+          className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
+        />
         <button className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500">
-          Propose Execution Plan
+          Persist Observer Run
         </button>
       </form>
+
+      <div className="mt-5">
+        <PersistentTrustPanel
+          activeLocks={activeLocks}
+          duplicateBlocked={duplicateBlocked}
+          persistedRun={persistedRun}
+          recentRuns={recentRuns}
+        />
+      </div>
 
       {decision && (
         <div
@@ -686,6 +963,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const autonomyRevision = cleanSearchParam(messages.autonomyRevision);
   const autonomyDecision = cleanAutonomyDecision(messages.autonomyDecision);
   const autonomyApprovalToken = cleanSearchParam(messages.autonomyApprovalToken);
+  const autonomyRunId = cleanSearchParam(messages.autonomyRunId);
+  const autonomyDuplicateBlocked = messages.autonomyDuplicate === "1";
   const showArchived = messages.archived === "1" || selectedStatus === "ARCHIVED";
   const taskBoardQuery: TaskBoardQuery = {
     q: searchQuery,
@@ -803,6 +1082,45 @@ export default async function Home({ searchParams }: HomeProps) {
     reviewPlans,
     tasks: tasksWithPipeline,
   });
+  const [persistedRun, recentRuns, activeLocks] = await Promise.all([
+    autonomyRunId
+      ? db.run.findUnique({
+          where: { id: autonomyRunId },
+          include: {
+            approvals: {
+              orderBy: { createdAt: "desc" },
+            },
+            events: {
+              orderBy: { createdAt: "desc" },
+              take: 20,
+            },
+            locks: {
+              orderBy: { expiresAt: "asc" },
+            },
+            rollbackSnapshots: {
+              orderBy: { createdAt: "desc" },
+              take: 20,
+            },
+          },
+        })
+      : null,
+    db.run.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        createdAt: true,
+        goal: true,
+        id: true,
+        staleReason: true,
+        status: true,
+      },
+      take: 8,
+    }),
+    db.executionLock.findMany({
+      where: { status: "active" },
+      orderBy: { expiresAt: "asc" },
+      take: 8,
+    }),
+  ]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -840,9 +1158,13 @@ export default async function Home({ searchParams }: HomeProps) {
           />
 
           <AutonomyPreviewMode
+            activeLocks={activeLocks}
             approvalToken={autonomyApprovalToken}
             decision={autonomyDecision}
+            duplicateBlocked={autonomyDuplicateBlocked}
             goal={autonomyGoal}
+            persistedRun={persistedRun}
+            recentRuns={recentRuns}
             revision={autonomyRevision}
           />
 

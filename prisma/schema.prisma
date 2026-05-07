@@ -52,6 +52,100 @@ model Idea {
   plans     FactoryPlan[]
 }
 
+model Run {
+  id                String             @id
+  goal              String
+  mode              String             @default("observer")
+  status            String             @default("approval_pending")
+  planHash          String
+  stateHash         String
+  staleReason       String             @default("")
+  stopReason        String             @default("none")
+  duplicateOf       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  approvals         Approval[]
+  events            ExecutionEvent[]
+  locks             ExecutionLock[]
+  rollbackSnapshots RollbackSnapshot[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([planHash, stateHash])
+}
+
+model Approval {
+  id         String    @id @default(cuid())
+  runId      String
+  taskId     String
+  token      String    @unique
+  status     String    @default("pending")
+  decision   String    @default("")
+  reason     String    @default("")
+  expiresAt  DateTime
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  run        Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model ExecutionEvent {
+  id        String   @id @default(cuid())
+  runId     String
+  taskId    String?
+  event     String
+  message   String
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([event])
+  @@index([createdAt])
+}
+
+model ExecutionLock {
+  id         String    @id @default(cuid())
+  lockKey    String    @unique
+  runId      String?
+  owner      String
+  status     String    @default("active")
+  acquiredAt DateTime  @default(now())
+  expiresAt  DateTime
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  run        Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([runId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model RollbackSnapshot {
+  id               String    @id @default(cuid())
+  runId            String
+  taskId           String?
+  kind             String
+  targetId         String?
+  targetPath       String?
+  content          String
+  metadata         String    @default("{}")
+  restoreReference String
+  restoredAt       DateTime?
+  createdAt        DateTime  @default(now())
+  run              Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([kind])
+  @@index([targetId])
+  @@index([targetPath])
+}
+
 model FactoryPlan {
   id             String   @id @default(cuid())
   ideaId         String

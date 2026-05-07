@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createTaskRollbackSnapshot,
   createRollbackReference,
+  restoreTaskSnapshot,
   simulateRollback,
 } from "@/lib/autonomy/rollback-manager";
 
@@ -45,5 +47,27 @@ describe("rollback manager", () => {
         summary: "Broken rollback",
       }),
     ).toMatchObject({ rollbackId: "rollback-a", status: "failed" });
+  });
+
+  it("restores task state from a real task snapshot reference", () => {
+    const snapshot = createTaskRollbackSnapshot({
+      description: "Before change",
+      id: "task-a",
+      labels: "Planning",
+      planId: "plan-a",
+      priority: "HIGH",
+      status: "TODO",
+      title: "Original task",
+      updatedAt: "2026-05-07T12:00:00.000Z",
+    });
+
+    expect(restoreTaskSnapshot(snapshot)).toMatchObject({
+      description: "Before change",
+      id: "task-a",
+      labels: "Planning",
+      priority: "HIGH",
+      status: "TODO",
+      title: "Original task",
+    });
   });
 });

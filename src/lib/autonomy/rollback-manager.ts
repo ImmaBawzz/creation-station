@@ -1,11 +1,33 @@
 export type RollbackActionType = "file_creation" | "file_edit" | "task_state_change";
 
+export type RollbackSnapshotKind = "file" | "task";
+
 export type RollbackReference = {
   rollbackId: string;
   actionType: RollbackActionType;
   canRollback: boolean;
   summary: string;
   simulatedSteps: string[];
+};
+
+export type RollbackSnapshotDraft = {
+  content: string;
+  kind: RollbackSnapshotKind;
+  metadata: Record<string, string | number | boolean | null>;
+  restoreReference: string;
+  targetId: string | null;
+  targetPath: string | null;
+};
+
+export type TaskRollbackSnapshotSource = {
+  id: string;
+  description: string;
+  labels?: string | null;
+  planId: string;
+  priority: string;
+  status: string;
+  title: string;
+  updatedAt: Date | string;
 };
 
 export type RollbackSimulationResult = {
@@ -87,5 +109,63 @@ export function simulateRollback(reference: RollbackReference | null): RollbackS
     rollbackId: reference.rollbackId,
     status: "ready",
     message: reference.summary,
+  };
+}
+
+export function createTaskRollbackSnapshot(task: TaskRollbackSnapshotSource): RollbackSnapshotDraft {
+  return {
+    content: JSON.stringify(
+      {
+        description: task.description,
+        labels: task.labels ?? "",
+        planId: task.planId,
+        priority: task.priority,
+        status: task.status,
+        title: task.title,
+        updatedAt: new Date(task.updatedAt).toISOString(),
+      },
+      null,
+      2,
+    ),
+    kind: "task",
+    metadata: {
+      status: task.status,
+      title: task.title,
+    },
+    restoreReference: `task:${task.id}`,
+    targetId: task.id,
+    targetPath: null,
+  };
+}
+
+export function createFileRollbackSnapshot({
+  content,
+  path,
+}: {
+  content: string;
+  path: string;
+}): RollbackSnapshotDraft {
+  return {
+    content,
+    kind: "file",
+    metadata: {
+      size: content.length,
+    },
+    restoreReference: `file:${path}`,
+    targetId: null,
+    targetPath: path,
+  };
+}
+
+export function restoreTaskSnapshot(snapshot: RollbackSnapshotDraft): TaskRollbackSnapshotSource {
+  if (snapshot.kind !== "task" || !snapshot.targetId) {
+    throw new Error("Snapshot is not a task restoration reference.");
+  }
+
+  const parsed = JSON.parse(snapshot.content) as Omit<TaskRollbackSnapshotSource, "id">;
+
+  return {
+    ...parsed,
+    id: snapshot.targetId,
   };
 }

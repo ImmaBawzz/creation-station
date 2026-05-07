@@ -436,3 +436,80 @@ export async function updateTaskBlocker(formData: FormData) {
 
   revalidatePath("/");
 }
+
+export async function createAutonomyRun(formData: FormData) {
+  const goal = clean(formData.get("autonomyGoal"));
+  const revision = clean(formData.get("autonomyRevision"));
+
+  if (!goal) {
+    throw new Error("Autonomy preview goal is required.");
+  }
+
+  const { persistAutonomyRun } = await import("@/lib/autonomy/execution-store");
+  const result = await persistAutonomyRun({
+    goal,
+    revision,
+  });
+  const params = new URLSearchParams({
+    autonomyRunId: result.runId,
+  });
+
+  if (result.duplicateBlocked) {
+    params.set("autonomyDuplicate", "1");
+  }
+
+  revalidatePath("/");
+  redirect(`/?${params.toString()}#autonomy-preview`);
+}
+
+export async function decideAutonomyApproval(formData: FormData) {
+  const approvalId = clean(formData.get("approvalId"));
+  const decision = clean(formData.get("decision"));
+
+  if (!approvalId || (decision !== "approve" && decision !== "reject")) {
+    throw new Error("Approval decision is invalid.");
+  }
+
+  const { updateApprovalDecision } = await import("@/lib/autonomy/execution-store");
+  const runId = await updateApprovalDecision({
+    approvalId,
+    decision,
+  });
+
+  revalidatePath("/");
+  redirect(`/?autonomyRunId=${encodeURIComponent(runId)}#autonomy-preview`);
+}
+
+export async function releaseAutonomyLocks(formData: FormData) {
+  const runId = clean(formData.get("runId"));
+
+  if (!runId) {
+    throw new Error("Run id is required to release locks.");
+  }
+
+  const { releaseRunLocks } = await import("@/lib/autonomy/execution-store");
+  await releaseRunLocks(runId);
+  revalidatePath("/");
+  redirect(`/?autonomyRunId=${encodeURIComponent(runId)}#autonomy-preview`);
+}
+
+export async function expireAutonomyLocks() {
+  const { markExpiredLocks } = await import("@/lib/autonomy/execution-store");
+
+  await markExpiredLocks();
+  revalidatePath("/");
+  redirect("/#autonomy-preview");
+}
+
+export async function restoreRollbackSnapshot(formData: FormData) {
+  const snapshotId = clean(formData.get("snapshotId"));
+
+  if (!snapshotId) {
+    throw new Error("Rollback snapshot id is required.");
+  }
+
+  const { restoreTaskRollbackSnapshotById } = await import("@/lib/autonomy/execution-store");
+  const runId = await restoreTaskRollbackSnapshotById(snapshotId);
+  revalidatePath("/");
+  redirect(`/?autonomyRunId=${encodeURIComponent(runId)}#autonomy-preview`);
+}
