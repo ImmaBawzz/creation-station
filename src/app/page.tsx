@@ -1631,9 +1631,9 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               </div>
 
-              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]">
-                <div className="min-w-0">
-                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-search">
+              <form className="mt-5 grid min-w-0 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-2">
+                <div className="min-w-0 md:col-span-2">
+                  <label className="whitespace-nowrap text-xs font-medium text-zinc-500" htmlFor="idea-search">
                     Find ideas
                   </label>
                   <input
@@ -1645,7 +1645,7 @@ export default async function Home({ searchParams }: HomeProps) {
                   />
                 </div>
                 <div className="min-w-0">
-                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-status">
+                  <label className="whitespace-nowrap text-xs font-medium text-zinc-500" htmlFor="idea-status">
                     Workflow state
                   </label>
                   <select
@@ -1662,7 +1662,7 @@ export default async function Home({ searchParams }: HomeProps) {
                   </select>
                 </div>
                 <div className="min-w-0">
-                  <label className="text-xs font-medium text-zinc-500" htmlFor="idea-pipeline">
+                  <label className="whitespace-nowrap text-xs font-medium text-zinc-500" htmlFor="idea-pipeline">
                     Pipeline
                   </label>
                   <select
@@ -1680,13 +1680,13 @@ export default async function Home({ searchParams }: HomeProps) {
                   </select>
                 </div>
                 {showArchived && <input type="hidden" name="archived" value="1" />}
-                <div className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row xl:flex-col">
-                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 xl:whitespace-nowrap">
+                <div className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row md:col-span-2">
+                  <button className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500">
                     Apply
                   </button>
                   <Link
                     href="/"
-                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700 xl:whitespace-nowrap"
+                    className="rounded-xl bg-zinc-800 px-4 py-2 text-center text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
                   >
                     Clear
                   </Link>
