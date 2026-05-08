@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.8.0 - Activity Event Foundation
+
+### Added
+
+- Durable `ActivityEvent` Prisma model for auditable workflow history across ideas, plans, tasks, and backup exports.
+- Shared `logActivity()` and `getRecentActivity()` utilities for server actions and dashboard reads.
+- Dashboard `Recent Activity` panel with event labels, entity titles, timestamps, and compact metadata summaries.
+- Focused unit coverage for activity creation, retrieval ordering, and workflow logging integration.
+
+### Changed
+
+- Existing idea creation, Factory send, revision request, plan approval, task generation, and backup export flows now emit activity events without changing their core workflow logic.
+
+### Not Added
+
+- Autonomous execution
+- Background agents
+- Websocket systems
+- Notification systems
+- Large architecture rewrites
+
 ## v1.4.1 - Recommendation Tuning
 
 ### Added

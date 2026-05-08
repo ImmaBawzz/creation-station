@@ -2,6 +2,7 @@
 
 import type { IdeaStatus } from "@/generated/prisma/enums";
 import { generateFactoryPlan } from "@/lib/aiProvider";
+import { logActivity } from "@/lib/activity-log";
 import { logAnalyticsEvent } from "@/lib/analytics";
 import { buildMusicVideoPipelinePlan } from "@/lib/creative-execution";
 import { db } from "@/lib/db";
@@ -33,6 +34,16 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Something went wrong while making the AI plan. Please try again.";
+}
+
+function summarizeText(value: string, maxLength = 120): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
 const allowedTaskStatuses = [
@@ -90,6 +101,16 @@ export async function createIdea(formData: FormData) {
 
   await logAnalyticsEvent("idea_created", {
     ideaId: idea.id,
+  });
+
+  await logActivity({
+    entityId: idea.id,
+    entityType: "idea",
+    eventType: "idea_created",
+    metadata: {
+      category: idea.category,
+      title: idea.title,
+    },
   });
 
   revalidatePath("/");
@@ -186,6 +207,15 @@ export async function sendToFactory(formData: FormData) {
         ideaId: idea.id,
         projectId: plan.id,
       });
+      await logActivity({
+        entityId: idea.id,
+        entityType: "idea",
+        eventType: "sent_to_factory",
+        metadata: {
+          planTitle: generatedPlan.title,
+          title: idea.title,
+        },
+      });
     }
   } catch (error) {
     if (priorIdeaStatus) {
@@ -220,6 +250,11 @@ export async function approvePlan(formData: FormData) {
       include: {
         _count: {
           select: { tasks: true },
+        },
+        idea: {
+          select: {
+            title: true,
+          },
         },
       },
     });
@@ -292,19 +327,43 @@ export async function approvePlan(formData: FormData) {
 
     return {
       ideaId: plan.ideaId,
+      ideaTitle: plan.idea.title,
+      planTitle: plan.title,
       taskIds: createdTasks.map((task) => task.id),
+      taskTitles: createdTasks.map((task) => task.title),
     };
   });
 
   if (createdTaskMetadata) {
     await Promise.all(
-      createdTaskMetadata.taskIds.map((taskId) =>
-        logAnalyticsEvent("task_created", {
-          ideaId: createdTaskMetadata.ideaId,
-          projectId: planId,
-          taskId,
+      [
+        ...createdTaskMetadata.taskIds.map((taskId) =>
+          logAnalyticsEvent("task_created", {
+            ideaId: createdTaskMetadata.ideaId,
+            projectId: planId,
+            taskId,
+          }),
+        ),
+        logActivity({
+          entityId: planId,
+          entityType: "plan",
+          eventType: "plan_approved",
+          metadata: {
+            ideaTitle: createdTaskMetadata.ideaTitle,
+            title: createdTaskMetadata.planTitle,
+          },
         }),
-      ),
+        logActivity({
+          entityId: planId,
+          entityType: "plan",
+          eventType: "tasks_generated",
+          metadata: {
+            taskCount: createdTaskMetadata.taskIds.length,
+            title: createdTaskMetadata.planTitle,
+            topTask: createdTaskMetadata.taskTitles[0] ?? null,
+          },
+        }),
+      ],
     );
   }
 
@@ -334,6 +393,16 @@ export async function requestRevision(formData: FormData) {
   await db.idea.update({
     where: { id: plan.ideaId },
     data: { status: "NEEDS_REVISION" },
+  });
+
+  await logActivity({
+    entityId: planId,
+    entityType: "plan",
+    eventType: "revision_requested",
+    metadata: {
+      notesPreview: revisionNotes ? summarizeText(revisionNotes, 90) : "No notes provided",
+      title: plan.title,
+    },
   });
 
   revalidatePath("/");

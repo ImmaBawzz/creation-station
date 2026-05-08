@@ -214,6 +214,19 @@ model FactoryPlan {
   tasks          Task[]
 }
 
+model ActivityEvent {
+  id         String   @id @default(cuid())
+  eventType  String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([eventType])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
 model Task {
   id          String        @id @default(cuid())
   planId      String
