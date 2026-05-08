@@ -10,13 +10,13 @@ None.
 
 ## Medium
 
-### P2: Repeated Factory submission can create duplicate review plans
+### P2: Repeated Factory submission could create duplicate review plans
 
 - Area: Factory Planner / Review Inbox
 - Evidence: During QA, the same raw idea produced multiple `REVIEW_PENDING` plans after repeated Factory submission attempts.
 - User impact: Review Inbox can show duplicate plans for one idea, making it unclear which draft should be reviewed.
 - Data impact: No data loss. Approval still created tasks from the selected final plan.
-- Suggested fix: Add a guard in `sendToFactory` to prevent a new plan while a same-idea `REVIEW_PENDING` plan already exists, or supersede older pending plans when a revised plan is created.
+- Status: Resolved on the current line by guarding `sendToFactory` against same-idea `REVIEW_PENDING` duplication and showing a review notice instead of creating another plan.
 
 ### P2: No dedicated edit-idea UI
 
@@ -26,13 +26,13 @@ None.
 - Data impact: No data loss.
 - Suggested fix: Add a scoped edit action only if v1.6 or a later release explicitly includes idea editing.
 
-### P2: Factory processing state is not visibly represented
+### P2: Factory processing state was not visibly represented
 
 - Area: Factory Planner
 - Evidence: Plan generation eventually shows success/error, but there is no durable visible pending state or persisted `IN_FACTORY` transition during generation.
 - User impact: Slow local Ollama responses can feel unresponsive.
 - Data impact: No stuck state was observed.
-- Suggested fix: Add a client-side pending button state or a server-side status transition in a separately scoped UX hardening task.
+- Status: Resolved on the current line by persisting `IN_FACTORY` during planning, restoring the prior idea status on handled failure, and showing a disabled `Planning in Factory...` state in the inbox and Factory surfaces.
 
 ## Low
 
@@ -55,10 +55,12 @@ None.
 - Area: QA tooling, not confirmed app runtime
 - Evidence: Browser screenshot capture timed out, and one in-app Browser tab crashed during a long DOM session.
 - User impact: Reduced visual evidence for this QA pass.
-- Suggested fix: Add a project Playwright smoke script for repeatable screenshot and responsive checks.
+- Status: Further mitigated. The project now has both route/export smoke coverage via `npm run test:smoke` and a full Playwright workflow spec at `tests/e2e/core-workflow.spec.ts` for create -> factory -> review -> revision -> approval -> task creation. Screenshot capture and dedicated responsive assertions are still future follow-up work.
 
 ## Known Limitations
 
 - No external browser matrix was run.
 - Mobile responsiveness was checked from responsive class structure and DOM, not screenshot evidence.
 - Failed Factory-provider path was not reproduced because local Ollama responded successfully.
+- Full workflow E2E now uses a deterministic test provider and isolated SQLite database, so it does not validate live Ollama behavior.
+- Exact local E2E command used during this pass: `C:\Program Files\nodejs\node.exe node_modules/playwright/cli.js test tests/e2e/core-workflow.spec.ts`.

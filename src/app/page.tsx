@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppSidebar } from "@/app/components/AppSidebar";
 import { ExecutionModeControls } from "@/app/components/ExecutionModeControls";
+import { FactorySubmitButton } from "@/app/components/FactorySubmitButton";
 import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
@@ -38,6 +39,7 @@ import { listWorkerRuntimeMonitor } from "@/lib/autonomy/execution-worker";
 type HomeProps = {
   searchParams?: Promise<{
     factoryError?: string;
+    factoryNotice?: string;
     factorySuccess?: string;
     q?: string;
     status?: string;
@@ -1529,6 +1531,13 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
           )}
 
+          {messages.factoryNotice && (
+            <div className="rounded-3xl border border-amber-500/40 bg-amber-500/10 p-5 text-sm text-amber-100 shadow-2xl">
+              <p className="font-semibold">Plan already waiting</p>
+              <p className="mt-2 text-amber-100/90">{messages.factoryNotice}</p>
+            </div>
+          )}
+
           {ideas.length === 0 && <FirstUseOnboarding />}
 
           <AiRecommendationPanel
@@ -1773,19 +1782,33 @@ export default async function Home({ searchParams }: HomeProps) {
                             <form action={sendToFactory}>
                               <input type="hidden" name="ideaId" value={idea.id} />
                               <input type="hidden" name="returnTo" value="/" />
-                              <button className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500">
-                                Convert in Factory
-                              </button>
+                              <FactorySubmitButton
+                                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-200"
+                                idleText="Convert in Factory"
+                                pendingText="Checking review..."
+                              />
                             </form>
+                          )}
+
+                          {idea.status === "IN_FACTORY" && (
+                            <button
+                              className="rounded-xl bg-violet-950 px-3 py-2 text-xs font-semibold text-violet-200"
+                              disabled
+                              type="button"
+                            >
+                              Planning in Factory...
+                            </button>
                           )}
 
                           {idea.status === "NEEDS_REVISION" && (
                             <form action={sendToFactory}>
                               <input type="hidden" name="ideaId" value={idea.id} />
                               <input type="hidden" name="returnTo" value="/" />
-                              <button className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-semibold hover:bg-orange-500">
-                                Convert Revised Plan
-                              </button>
+                              <FactorySubmitButton
+                                className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-semibold hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-orange-950 disabled:text-orange-200"
+                                idleText="Convert Revised Plan"
+                                pendingText="Checking review..."
+                              />
                             </form>
                           )}
 
@@ -1858,6 +1881,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
                 {reviewPlans.map((plan) => {
                   const requiredAssets = assetLines(plan.requiredAssets);
+                  const nextActionLines = assetLines(plan.nextActions);
 
                   return (
                     <article
@@ -1876,52 +1900,78 @@ export default async function Home({ searchParams }: HomeProps) {
                       From idea: {plan.idea.title}
                     </p>
 
-                    <p className="mt-3 text-sm text-zinc-300">{plan.summary}</p>
-
-                    <div className="mt-4 rounded-xl bg-zinc-900 p-3 text-sm text-zinc-300">
-                      <strong>Concept:</strong>
-                      <p className="mt-2">{plan.concept}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+                        {assetCountLabel(requiredAssets.length)}
+                      </span>
+                      <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-violet-100">
+                        {nextActionLines.length === 1
+                          ? "1 next action"
+                          : `${nextActionLines.length} next actions`}
+                      </span>
+                      {plan.status === "REVISION_REQUESTED" && plan.revisionNotes && (
+                        <span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-orange-100">
+                          Revision notes saved
+                        </span>
+                      )}
                     </div>
 
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs">
-                        <div className="flex items-center justify-between gap-3">
-                          <strong className="text-cyan-100">Required Assets</strong>
-                          <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-medium text-cyan-100">
-                            {assetCountLabel(requiredAssets.length)}
-                          </span>
+                    <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-zinc-300">
+                      {plan.summary}
+                    </p>
+
+                    <details className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-sm text-zinc-300">
+                      <summary className="cursor-pointer list-none font-semibold text-zinc-100">
+                        Plan details
+                      </summary>
+
+                      <div className="mt-3 space-y-3">
+                        <div className="rounded-xl bg-zinc-900 p-3 text-sm text-zinc-300">
+                          <strong>Concept</strong>
+                          <p className="mt-2 whitespace-pre-wrap">{plan.concept}</p>
                         </div>
-                        {requiredAssets.length > 0 ? (
-                          <ul className="mt-3 space-y-2 text-zinc-300">
-                            {requiredAssets.map((asset) => (
-                              <li key={asset} className="rounded-lg bg-zinc-950/70 px-3 py-2">
-                                {asset}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-3 text-zinc-400">
-                            No required assets were listed for this plan.
-                          </p>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs">
+                            <div className="flex items-center justify-between gap-3">
+                              <strong className="text-cyan-100">Required Assets</strong>
+                              <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-medium text-cyan-100">
+                                {assetCountLabel(requiredAssets.length)}
+                              </span>
+                            </div>
+                            {requiredAssets.length > 0 ? (
+                              <ul className="mt-3 space-y-2 text-zinc-300">
+                                {requiredAssets.map((asset) => (
+                                  <li key={asset} className="rounded-lg bg-zinc-950/70 px-3 py-2">
+                                    {asset}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-3 text-zinc-400">
+                                No required assets were listed for this plan.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="rounded-xl bg-zinc-900 p-3 text-xs">
+                            <strong>Risks</strong>
+                            <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
+                              {plan.risks}
+                            </pre>
+                          </div>
+                        </div>
+
+                        {plan.nextActions && (
+                          <div className="rounded-xl bg-zinc-900 p-3 text-xs">
+                            <strong className="text-zinc-200">AI-Suggested Next Actions</strong>
+                            <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
+                              {plan.nextActions}
+                            </pre>
+                          </div>
                         )}
                       </div>
-
-                      <div className="rounded-xl bg-zinc-900 p-3 text-xs">
-                        <strong>Risks</strong>
-                        <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
-                          {plan.risks}
-                        </pre>
-                      </div>
-                    </div>
-
-                    {plan.nextActions && (
-                      <div className="mt-3 rounded-xl bg-zinc-900 p-3 text-xs">
-                        <strong className="text-zinc-200">AI-Suggested Next Actions</strong>
-                        <pre className="mt-2 whitespace-pre-wrap text-zinc-400">
-                          {plan.nextActions}
-                        </pre>
-                      </div>
-                    )}
+                    </details>
 
                     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-300">
                       <p className="font-semibold text-zinc-100">Choose the next step</p>

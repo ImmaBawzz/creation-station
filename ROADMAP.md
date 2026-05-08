@@ -13,15 +13,20 @@
 - Current stable baseline: `v1.1.0`
 - Current completed milestone: `v1.1`
 - Current next planning milestone: `v1.5`
-- Current working branch: `feature/v1.5-task-separation`
-- Current next best step: document and implement the v1.5 release-readiness roadmap from the stable v1.4.1 foundation.
+- Current working branch: `master`
+- Current next best step: continue small v1.5-style release-readiness hardening on `master`, starting with review-inbox scanability and clarity.
 
 Baseline notes:
 - `v1.1-rc.1` remains the release-candidate QA tag.
 - `v1.1.0` is the stable baseline tag for v1.5 planning and implementation.
 - `docs/roadmap/v1.5-release-readiness.md` is the active v1.5 plan.
 - `docs/roadmap/v1.5-system-organization.md` is earlier foundation planning and remains useful as context for completed organization work.
-- `feature/v1.5-task-separation` is the current active branch containing organization, pipeline, intelligence, dependency, and task-board foundation work.
+- Older branch references such as `feature/v1.5-task-separation` and `feature/v1.6-intelligence-layer` should now be treated as historical planning/release context rather than the active execution line.
+- Current `master` includes forward-only stabilization work, including duplicate-plan prevention and visible `IN_FACTORY` workflow state hardening.
+
+Fresh validation notes:
+- 2026-05-08 manual QA on `master` confirmed visible `IN_FACTORY` state, persisted revision notes, and successful task creation after approving a fresh review plan.
+- Use `QA_PASS_REPORT.md` and `docs/CURRENT_STATE.md` as the current operational record for active `master` behavior.
 
 ## Next Planning Phases
 

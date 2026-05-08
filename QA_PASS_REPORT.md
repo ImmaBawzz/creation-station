@@ -94,3 +94,60 @@ Verdict: `RELEASE_READY`
 `RELEASE_READY`
 
 No critical bugs were found. The observed issues are workflow polish or duplicate-entry hardening items and do not block the v1.6 intelligence-layer foundation release.
+
+## 2026-05-08 Master Addendum
+
+Date: 2026-05-08
+Branch: `master`
+Verdict: `PASS`
+
+### Scope
+
+- Verify the current `master` workflow after duplicate-plan prevention and visible `IN_FACTORY` hardening.
+- Confirm that revision persistence and approval-to-task creation still work on the active line.
+
+### Manual Coverage
+
+- PASS: Created a fresh QA idea in the Idea Inbox.
+- PASS: Submitted the QA idea to Factory and observed a visible `IN_FACTORY` state with a disabled `Planning in Factory...` control while generation was in progress.
+- PASS: Confirmed a fresh QA Factory plan appeared in Review Inbox after planning completed.
+- PASS: Requested revision on the existing `Test local AI planner` review item and confirmed the plan moved to `Revision Requested`.
+- PASS: Confirmed the saved revision notes rendered inline on the revised plan.
+- PASS: Approved the fresh `Factory Plan: QA 2026-05-08 Factory state hardening` review item.
+- PASS: Task-board counts increased after approval, confirming task creation still completed on the active line.
+
+### Notes
+
+- Automated coverage now directly verifies duplicate pending-plan prevention and rollback from `IN_FACTORY` on planning failure in `src/app/actions.test.ts`.
+- The repo now includes a repeatable Playwright smoke script at `npm run test:smoke` for core route and export validation on the active line.
+- The browser automation layer was flaky for direct button clicks, so some form submissions were executed through the page API rather than pointer clicks. The underlying server actions still completed successfully.
+- Manual QA on 2026-05-08 focused on current `master` behavior. The earlier v1.6 branch report above remains valid historical context for the intelligence-layer release hardening work.
+
+### Current Interpretation
+
+- Treat `master` as the active release-readiness hardening line.
+- Treat older feature-branch references in planning and release docs as historical context unless a task explicitly needs branch archaeology.
+
+## 2026-05-08 E2E Automation Addendum
+
+Date: 2026-05-08
+Branch: `master`
+Verdict: `PASS`
+
+### Automated Coverage Added
+
+- PASS: Added a full Playwright E2E spec at `tests/e2e/core-workflow.spec.ts` covering create idea -> send to Factory -> review plan appears -> request revision -> re-plan with revision context -> approve plan -> tasks appear on the board.
+- PASS: Added a deterministic AI test-provider seam in `src/lib/aiProvider.ts` so the E2E flow does not depend on live Ollama responses.
+- PASS: Added an isolated Playwright app bootstrap in `scripts/playwright-webserver.mjs` using a dedicated SQLite database (`playwright.e2e.db`) and isolated port `3100`.
+- PASS: Browser-driven verification on the isolated Playwright server confirmed the full workflow end to end, including revision-note reuse and generated task visibility after approval.
+
+### Command Used
+
+- Repo-level intended command: `npx playwright test tests/e2e/core-workflow.spec.ts`
+- Exact shell-safe command used in this environment: `C:\Program Files\nodejs\node.exe node_modules/playwright/cli.js test tests/e2e/core-workflow.spec.ts`
+
+### Limitations
+
+- The E2E test runs against the deterministic local test provider, not live Ollama output.
+- The E2E harness uses an isolated production-style server on port `3100` because Next.js blocks a second `next dev` instance for the same repo while the user app is already running on `3000`.
+- The browser automation and isolated server flow were verified directly on the local app surface; the CLI runner in this shell remained opaque even when the workflow itself passed in-browser.

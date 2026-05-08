@@ -1,5 +1,6 @@
 "use server";
 
+import type { IdeaStatus } from "@/generated/prisma/enums";
 import { generateFactoryPlan } from "@/lib/aiProvider";
 import { logAnalyticsEvent } from "@/lib/analytics";
 import { buildMusicVideoPipelinePlan } from "@/lib/creative-execution";
@@ -19,7 +20,7 @@ function getFactoryReturnPath(value: string): "/" | "/factory" {
 
 function buildFactoryMessagePath(
   path: "/" | "/factory",
-  key: "factoryError" | "factorySuccess",
+  key: "factoryError" | "factorySuccess" | "factoryNotice",
   message: string,
 ): string {
   const params = new URLSearchParams({ [key]: message });
@@ -97,15 +98,23 @@ export async function createIdea(formData: FormData) {
 export async function sendToFactory(formData: FormData) {
   const returnTo = getFactoryReturnPath(clean(formData.get("returnTo")));
   const ideaId = clean(formData.get("ideaId"));
+  let completionMessage = {
+    key: "factorySuccess" as "factorySuccess" | "factoryNotice",
+    message: "AI plan saved. Read it below, then review or approve it next.",
+  };
+  let priorIdeaStatus: IdeaStatus | null = null;
 
   try {
     const idea = await db.idea.findUnique({
       where: { id: ideaId },
       include: {
         plans: {
-          where: { status: "REVISION_REQUESTED" },
+          where: {
+            status: {
+              in: ["REVIEW_PENDING", "REVISION_REQUESTED"],
+            },
+          },
           orderBy: { createdAt: "desc" },
-          take: 1,
         },
       },
     });
@@ -114,54 +123,78 @@ export async function sendToFactory(formData: FormData) {
       throw new Error("That idea could not be found. Refresh the page and try again.");
     }
 
-    const priorRevision = idea.plans[0] ?? null;
+    const pendingPlan = idea.plans.find((plan) => plan.status === "REVIEW_PENDING") ?? null;
 
-    const generatedPlan = await generateFactoryPlan({
-      title: idea.title,
-      rawText: idea.rawText,
-      category: idea.category,
-      tags: idea.tags,
-      priority: idea.priority,
-      potential: idea.potential,
-      promptPresets: {
-        factory: await getPromptPresetCookie("creation_station_factory_preset"),
-        revision: await getPromptPresetCookie("creation_station_revision_preset"),
-      },
-      priorPlan: priorRevision
-        ? {
-            summary: priorRevision.summary,
-            concept: priorRevision.concept,
-            nextActions: priorRevision.nextActions,
-            revisionNotes: priorRevision.revisionNotes,
-          }
-        : null,
-    });
+    if (pendingPlan) {
+      completionMessage = {
+        key: "factoryNotice",
+        message: `${pendingPlan.title} is already waiting for review. Open Review Inbox before creating another plan.`,
+      };
+    } else {
+      priorIdeaStatus = idea.status;
 
-    const plan = await db.factoryPlan.create({
-      data: {
+      await db.idea.update({
+        where: { id: idea.id },
+        data: { status: "IN_FACTORY" },
+      });
+
+      const priorRevision =
+        idea.plans.find((plan) => plan.status === "REVISION_REQUESTED") ?? null;
+
+      const generatedPlan = await generateFactoryPlan({
+        title: idea.title,
+        rawText: idea.rawText,
+        category: idea.category,
+        tags: idea.tags,
+        priority: idea.priority,
+        potential: idea.potential,
+        promptPresets: {
+          factory: await getPromptPresetCookie("creation_station_factory_preset"),
+          revision: await getPromptPresetCookie("creation_station_revision_preset"),
+        },
+        priorPlan: priorRevision
+          ? {
+              summary: priorRevision.summary,
+              concept: priorRevision.concept,
+              nextActions: priorRevision.nextActions,
+              revisionNotes: priorRevision.revisionNotes,
+            }
+          : null,
+      });
+
+      const plan = await db.factoryPlan.create({
+        data: {
+          ideaId: idea.id,
+          ...generatedPlan,
+          status: "REVIEW_PENDING",
+        },
+      });
+
+      await db.idea.update({
+        where: { id: idea.id },
+        data: {
+          status: "PLAN_READY",
+          summary: generatedPlan.summary,
+        },
+      });
+
+      await logAnalyticsEvent("idea_converted", {
         ideaId: idea.id,
-        ...generatedPlan,
-        status: "REVIEW_PENDING",
-      },
-    });
-
-    await db.idea.update({
-      where: { id: idea.id },
-      data: {
-        status: "PLAN_READY",
-        summary: generatedPlan.summary,
-      },
-    });
-
-    await logAnalyticsEvent("idea_converted", {
-      ideaId: idea.id,
-      projectId: plan.id,
-    });
-    await logAnalyticsEvent("project_created", {
-      ideaId: idea.id,
-      projectId: plan.id,
-    });
+        projectId: plan.id,
+      });
+      await logAnalyticsEvent("project_created", {
+        ideaId: idea.id,
+        projectId: plan.id,
+      });
+    }
   } catch (error) {
+    if (priorIdeaStatus) {
+      await db.idea.update({
+        where: { id: ideaId },
+        data: { status: priorIdeaStatus },
+      });
+    }
+
     redirect(
       buildFactoryMessagePath(returnTo, "factoryError", getErrorMessage(error)),
     );
@@ -170,11 +203,7 @@ export async function sendToFactory(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/factory");
   redirect(
-    buildFactoryMessagePath(
-      returnTo,
-      "factorySuccess",
-      "AI plan saved. Read it below, then review or approve it next.",
-    ),
+    buildFactoryMessagePath(returnTo, completionMessage.key, completionMessage.message),
   );
 }
 

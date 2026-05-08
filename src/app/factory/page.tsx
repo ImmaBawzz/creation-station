@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppSidebar } from "@/app/components/AppSidebar";
+import { FactorySubmitButton } from "@/app/components/FactorySubmitButton";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { db } from "@/lib/db";
 import { potentialLabel, statusBadgeClass, statusLabel } from "@/lib/status-ui";
@@ -9,6 +10,7 @@ import { sendToFactory } from "../actions";
 type FactoryPageProps = {
   searchParams?: Promise<{
     factoryError?: string;
+    factoryNotice?: string;
     factorySuccess?: string;
   }>;
 };
@@ -19,7 +21,7 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
   const planningIdeas = await db.idea.findMany({
     where: {
       status: {
-        in: ["RAW", "NEEDS_REVISION", "PLAN_READY"],
+        in: ["RAW", "NEEDS_REVISION", "IN_FACTORY", "PLAN_READY"],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -64,6 +66,13 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
               <div className="rounded-3xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-sm text-emerald-100 shadow-2xl">
                 <p className="font-semibold">AI plan created</p>
                 <p className="mt-2 text-emerald-100/90">{messages.factorySuccess}</p>
+              </div>
+            )}
+
+            {messages.factoryNotice && (
+              <div className="rounded-3xl border border-amber-500/40 bg-amber-500/10 p-5 text-sm text-amber-100 shadow-2xl">
+                <p className="font-semibold">Plan already waiting</p>
+                <p className="mt-2 text-amber-100/90">{messages.factoryNotice}</p>
               </div>
             )}
 
@@ -140,13 +149,30 @@ export default async function FactoryPage({ searchParams }: FactoryPageProps) {
                         )}
 
                         <div className="mt-4 flex flex-wrap gap-2">
-                          <form action={sendToFactory}>
-                            <input type="hidden" name="ideaId" value={idea.id} />
-                            <input type="hidden" name="returnTo" value="/factory" />
-                            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">
-                              {latestPlan ? "Make New AI Plan" : "Make AI Plan"}
-                            </button>
-                          </form>
+                          {idea.status === "IN_FACTORY" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className="rounded-xl bg-violet-950 px-4 py-2 text-sm font-semibold text-violet-200"
+                                disabled
+                                type="button"
+                              >
+                                Planning in Factory...
+                              </button>
+                              <p className="self-center text-xs text-zinc-400">
+                                This idea is already being planned. Wait for the next review-ready result.
+                              </p>
+                            </div>
+                          ) : (
+                            <form action={sendToFactory}>
+                              <input type="hidden" name="ideaId" value={idea.id} />
+                              <input type="hidden" name="returnTo" value="/factory" />
+                              <FactorySubmitButton
+                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-200"
+                                idleText={latestPlan ? "Make New AI Plan" : "Make AI Plan"}
+                                pendingText="Checking review queue..."
+                              />
+                            </form>
+                          )}
 
                           <Link
                             href="/"

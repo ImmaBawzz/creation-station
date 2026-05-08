@@ -4,6 +4,11 @@
 
 v1.6 prepares the local deterministic intelligence layer for future expansion by modularizing the existing heuristics and adding focused unit coverage. This release does not add new product features, external AI APIs, autonomy, automation runners, or database schema changes.
 
+Historical note:
+
+- This checklist remains the historical record for the `feature/v1.6-intelligence-layer` hardening slice.
+- Later workflow reliability hardening, including duplicate-plan prevention, visible `IN_FACTORY` state, and review-inbox scanability updates, continued forward on `master` and is tracked in the active repo-state and QA docs.
+
 ## Stability Audit
 
 - Branch verified: `feature/v1.6-intelligence-layer`.

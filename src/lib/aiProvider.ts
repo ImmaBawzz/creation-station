@@ -28,6 +28,58 @@ export type AiConnectionTestResult = {
   message: string;
 };
 
+function shortenTestText(value: string, maxLength = 48): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function buildTestFactoryPlan(
+  idea: FactoryPlannerIdeaInput,
+): FactoryPlannerResult {
+  const title = idea.priorPlan
+    ? `Revised Factory Plan: ${idea.title}`
+    : `Factory Plan: ${idea.title}`;
+  const revisionFocus = idea.priorPlan?.revisionNotes
+    ? shortenTestText(idea.priorPlan.revisionNotes)
+    : "No revision notes were provided.";
+  const summary = idea.priorPlan
+    ? `Revised test plan for ${idea.title}. Revision focus: ${revisionFocus}`
+    : `Initial test plan for ${idea.title}.`;
+  const concept = idea.priorPlan
+    ? `Updated concept for ${idea.title} using revision guidance: ${revisionFocus}`
+    : `Initial concept for ${idea.title} built from the submitted idea.`;
+  const requiredAssets = [
+    `Creative brief for ${idea.title}`,
+    `Reference assets tagged ${idea.tags || "workflow"}`,
+    `Approval checklist for ${idea.category}`,
+  ].join("\n");
+  const nextActions = idea.priorPlan
+    ? [
+        `Apply revision notes for ${idea.title}`,
+        `Refresh concept brief for ${idea.title}`,
+        `Approve revised execution checklist for ${idea.title}`,
+      ].join("\n")
+    : [
+        `Draft creative brief for ${idea.title}`,
+        `Collect reference assets for ${idea.title}`,
+        `Schedule review for ${idea.title}`,
+      ].join("\n");
+
+  return {
+    title,
+    summary,
+    concept,
+    requiredAssets,
+    risks: "Low risk in test provider mode.",
+    nextActions,
+  };
+}
+
 function compactErrorText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -76,6 +128,14 @@ function explainPayloadError(error: string, model: string): string {
 function getOllamaConfig() {
   const provider = process.env.AI_PROVIDER ?? "ollama";
 
+  if (provider === "test") {
+    return {
+      baseUrl: "test://local-provider",
+      model: "deterministic-test-model",
+      provider,
+    };
+  }
+
   if (provider !== "ollama") {
     throw new Error(
       `Unsupported AI provider \"${provider}\". Set AI_PROVIDER=ollama in .env.local.`,
@@ -96,6 +156,20 @@ function getOllamaConfig() {
 
 export function getAiProviderStatus(): AiProviderStatus {
   const provider = process.env.AI_PROVIDER ?? "ollama";
+
+  if (provider === "test") {
+    return {
+      provider,
+      supported: true,
+      baseUrl: "test://local-provider",
+      model: "deterministic-test-model",
+      hasModel: true,
+      hasBaseUrl: true,
+      environmentReady: true,
+      message: "AI Factory test provider is enabled for deterministic local runs.",
+    };
+  }
+
   const baseUrl = process.env.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434";
   const model = process.env.OLLAMA_MODEL?.trim() ?? "";
   const supported = provider === "ollama";
@@ -127,6 +201,13 @@ export function getAiProviderStatus(): AiProviderStatus {
 
 export async function testAiProviderConnection(): Promise<AiConnectionTestResult> {
   const status = getAiProviderStatus();
+
+  if (status.provider === "test") {
+    return {
+      ok: true,
+      message: "Test provider is ready for deterministic local planning.",
+    };
+  }
 
   if (!status.environmentReady) {
     return {
@@ -220,7 +301,11 @@ function parseFactoryPlannerResult(payload: string): FactoryPlannerResult {
 export async function generateFactoryPlan(
   idea: FactoryPlannerIdeaInput,
 ): Promise<FactoryPlannerResult> {
-  const { baseUrl, model } = getOllamaConfig();
+  const { baseUrl, model, provider } = getOllamaConfig();
+
+  if (provider === "test") {
+    return buildTestFactoryPlan(idea);
+  }
 
   let response: Response;
 
