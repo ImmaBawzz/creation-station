@@ -28,3 +28,17 @@ export type VisualEngineProjectValidationResult = {
   valid: boolean;
   warnings: string[];
 };
+
+export type VisualEngineRenderResult = {
+  outputPath: string;
+  packagePath: string;
+  projectId: string;
+  renderPath: string;
+};
+
+export type VisualEnginePackageResult = {
+  bundlePath: string;
+  files: string[];
+  metadataPath: string;
+  projectId: string;
+};

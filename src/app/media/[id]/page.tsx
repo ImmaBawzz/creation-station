@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { readVisualProjectManifest, relativeProjectPath } from "@/modules/visual-engine/manifest";
 import { getVisualProjectAssetFolders } from "@/modules/visual-engine/paths";
 import { validateVisualProjectById } from "@/modules/visual-engine/validate";
+import { RenderProjectButton } from "./RenderProjectButton";
 
 type MediaProjectPageProps = {
   params: Promise<{ id: string }>;
@@ -58,12 +59,15 @@ export default async function MediaProjectPage({ params }: MediaProjectPageProps
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">Validation</h2>
-            <Link
-              className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
-              href={`/api/visual-engine/projects/${project.id}/validate`}
-            >
-              View Validation JSON
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+                href={`/api/visual-engine/projects/${project.id}/validate`}
+              >
+                View Validation JSON
+              </Link>
+              <RenderProjectButton projectId={project.id} />
+            </div>
           </div>
 
           <div className="mt-4">
