@@ -303,6 +303,10 @@ export async function POST(request: Request) {
       scene_duration_strategy: "even",
       scenes: SCENES,
       start_image: imagePath,
+      timing: {
+        audio_analysis_enabled: true,
+        version: "v1.2",
+      },
       visual_prompt: visualPrompt,
       visual_source: imagePath ? "start_image" : "placeholder",
       visual_style: visualPrompt,

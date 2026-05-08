@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import array
 import json
 import math
 import re
@@ -55,13 +56,25 @@ class LyricLine:
     start: float
     end: float
     section: str = "Lyrics"
+    confidence: float = 0.5
 
 
 @dataclass(frozen=True)
 class LyricTimingResult:
+    audio_analysis: "AudioAnalysis | None"
     detected_sections: list[str]
     lines: list[LyricLine]
     mode: str
+
+
+@dataclass(frozen=True)
+class AudioAnalysis:
+    beat_times: list[float]
+    chorus_zones: list[tuple[float, float]]
+    energy_change_times: list[float]
+    intro_silence_end: float
+    likely_vocal_zones: list[tuple[float, float]]
+    summary: str
 
 
 @dataclass(frozen=True)
@@ -122,7 +135,8 @@ def main() -> int:
         validate_optional_visual_inputs(config)
 
         audio_duration = inspect_audio_duration(audio_path)
-        lyric_timing = parse_lyrics(lyrics_path, audio_duration)
+        audio_analysis = analyze_audio_for_timing(audio_path, audio_duration, config)
+        lyric_timing = parse_lyrics(lyrics_path, audio_duration, audio_analysis)
         lyrics = lyric_timing.lines
         scenes = prepare_scene_timing(config, audio_duration)
 
@@ -383,7 +397,186 @@ def inspect_audio_duration(audio_path: Path) -> float:
     return duration
 
 
-def parse_lyrics(lyrics_path: Path, audio_duration: float) -> LyricTimingResult:
+def analyze_audio_for_timing(
+    audio_path: Path,
+    audio_duration: float,
+    config: dict[str, Any],
+) -> AudioAnalysis | None:
+    timing_settings = config.get("timing", {})
+    if isinstance(timing_settings, dict) and timing_settings.get("audio_analysis_enabled") is False:
+        return None
+
+    sample_rate = 11_025
+    frame_seconds = 0.25
+    frame_size = max(1, int(sample_rate * frame_seconds))
+    command = [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-i",
+        str(audio_path),
+        "-ac",
+        "1",
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "s16le",
+        "-",
+    ]
+    result = run_binary_command(command, description="Decode audio for timing analysis")
+    samples = array.array("h")
+    samples.frombytes(result.stdout)
+    if not samples:
+        return None
+
+    energies: list[float] = []
+    for index in range(0, len(samples), frame_size):
+        frame = samples[index:index + frame_size]
+        if not frame:
+            continue
+        rms = math.sqrt(sum((sample / 32768.0) ** 2 for sample in frame) / len(frame))
+        energies.append(rms)
+
+    if len(energies) < 4:
+        return None
+
+    peak = max(energies) or 1.0
+    normalized = [energy / peak for energy in energies]
+    smoothed = moving_average(normalized, radius=2)
+    active_threshold = max(0.035, percentile(smoothed, 0.20) * 1.8)
+    intro_threshold = max(0.010, percentile(smoothed, 0.12) * 1.25)
+    strong_threshold = max(0.18, percentile(smoothed, 0.70))
+    very_strong_threshold = max(0.24, percentile(smoothed, 0.84))
+
+    intro_silence_end = 0.0
+    sustain_frames = max(2, int(1.5 / frame_seconds))
+    for index in range(0, max(1, len(smoothed) - sustain_frames)):
+        sustained = smoothed[index:index + sustain_frames]
+        if sustained and sum(1 for energy in sustained if energy >= intro_threshold) >= max(2, sustain_frames - 1):
+            intro_silence_end = index * frame_seconds
+            break
+
+    energy_change_times = detect_energy_changes(smoothed, frame_seconds)
+    beat_times = detect_beat_grid(smoothed, frame_seconds)
+    likely_vocal_zones = detect_zones(
+        smoothed,
+        frame_seconds,
+        threshold=strong_threshold,
+        min_duration=4.0,
+        max_gap=1.5,
+    )
+    if not likely_vocal_zones:
+        likely_vocal_zones = [(intro_silence_end, audio_duration)]
+    chorus_zones = detect_zones(
+        smoothed,
+        frame_seconds,
+        threshold=very_strong_threshold,
+        min_duration=6.0,
+        max_gap=2.0,
+    )
+
+    summary = (
+        f"intro_silence_end={intro_silence_end:.2f}s, "
+        f"beats={len(beat_times)}, changes={len(energy_change_times)}, "
+        f"vocal_zones={len(likely_vocal_zones)}, chorus_zones={len(chorus_zones)}"
+    )
+    return AudioAnalysis(
+        beat_times=beat_times,
+        chorus_zones=chorus_zones[:8],
+        energy_change_times=energy_change_times[:24],
+        intro_silence_end=min(intro_silence_end, max(0.0, audio_duration - 1.0)),
+        likely_vocal_zones=likely_vocal_zones[:10],
+        summary=summary,
+    )
+
+
+def moving_average(values: list[float], radius: int) -> list[float]:
+    averaged: list[float] = []
+    for index in range(len(values)):
+        start = max(0, index - radius)
+        end = min(len(values), index + radius + 1)
+        averaged.append(sum(values[start:end]) / (end - start))
+    return averaged
+
+
+def percentile(values: list[float], quantile: float) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    index = min(len(sorted_values) - 1, max(0, int(round((len(sorted_values) - 1) * quantile))))
+    return sorted_values[index]
+
+
+def detect_energy_changes(energies: list[float], frame_seconds: float) -> list[float]:
+    if len(energies) < 8:
+        return []
+    deltas = [abs(energies[index] - energies[index - 1]) for index in range(1, len(energies))]
+    threshold = max(0.08, percentile(deltas, 0.88))
+    changes: list[float] = []
+    last_time = -999.0
+    for index, delta in enumerate(deltas, start=1):
+        event_time = index * frame_seconds
+        if delta >= threshold and event_time - last_time >= 6.0:
+            changes.append(event_time)
+            last_time = event_time
+    return changes
+
+
+def detect_beat_grid(energies: list[float], frame_seconds: float) -> list[float]:
+    if len(energies) < 8:
+        return []
+    threshold = max(0.10, percentile(energies, 0.72))
+    beats: list[float] = []
+    last_time = -999.0
+    for index in range(1, len(energies) - 1):
+        event_time = index * frame_seconds
+        if event_time - last_time < 0.35:
+            continue
+        if energies[index] >= threshold and energies[index] >= energies[index - 1] and energies[index] >= energies[index + 1]:
+            beats.append(event_time)
+            last_time = event_time
+    return beats
+
+
+def detect_zones(
+    energies: list[float],
+    frame_seconds: float,
+    *,
+    threshold: float,
+    min_duration: float,
+    max_gap: float,
+) -> list[tuple[float, float]]:
+    zones: list[tuple[float, float]] = []
+    active_start: float | None = None
+    last_active: float | None = None
+
+    for index, energy in enumerate(energies):
+        time = index * frame_seconds
+        if energy >= threshold:
+            if active_start is None:
+                active_start = time
+            last_active = time
+            continue
+
+        if active_start is not None and last_active is not None and time - last_active > max_gap:
+            zone_end = last_active + frame_seconds
+            if zone_end - active_start >= min_duration:
+                zones.append((active_start, zone_end))
+            active_start = None
+            last_active = None
+
+    if active_start is not None and last_active is not None:
+        zone_end = last_active + frame_seconds
+        if zone_end - active_start >= min_duration:
+            zones.append((active_start, zone_end))
+    return zones
+
+
+def parse_lyrics(
+    lyrics_path: Path,
+    audio_duration: float,
+    audio_analysis: AudioAnalysis | None,
+) -> LyricTimingResult:
     raw_lines = lyrics_path.read_text(encoding="utf-8-sig").splitlines()
     parsed = parse_lyric_source(raw_lines)
 
@@ -396,19 +589,46 @@ def parse_lyrics(lyrics_path: Path, audio_duration: float) -> LyricTimingResult:
 
     if timestamped_count and timestamped_count >= max(1, math.ceil(total_lines * 0.6)):
         return LyricTimingResult(
+            audio_analysis=audio_analysis,
             detected_sections=detected_sections,
             lines=prepare_lrc_timing(parsed["timestamped"], audio_duration),
             mode="manual_lrc",
         )
 
+    if audio_analysis is not None and detected_sections:
+        return LyricTimingResult(
+            audio_analysis=audio_analysis,
+            detected_sections=detected_sections,
+            lines=distribute_audio_assisted_section_lyrics(
+                parsed["plain_lines"],
+                audio_duration,
+                audio_analysis,
+            ),
+            mode="audio_assisted_section_weighted",
+        )
+
+    if audio_analysis is not None:
+        return LyricTimingResult(
+            audio_analysis=audio_analysis,
+            detected_sections=[],
+            lines=distribute_audio_assisted_even_lyrics(
+                parsed["plain_lines"],
+                audio_duration,
+                audio_analysis,
+            ),
+            mode="audio_assisted_even",
+        )
+
     if detected_sections:
         return LyricTimingResult(
+            audio_analysis=audio_analysis,
             detected_sections=detected_sections,
             lines=distribute_section_weighted_lyrics(parsed["plain_lines"], audio_duration),
             mode="section_weighted",
         )
 
     return LyricTimingResult(
+        audio_analysis=audio_analysis,
         detected_sections=[],
         lines=distribute_even_lyrics(parsed["plain_lines"], audio_duration),
         mode="even_fallback",
@@ -486,7 +706,13 @@ def prepare_lrc_timing(entries: list[tuple[float, str, str]], audio_duration: fl
             natural_end = start + 5.5
         elif natural_end - start < 1.8 and next_start - start >= 1.8:
             natural_end = min(audio_duration, start + 1.8)
-        lyrics.append(LyricLine(text=text, start=max(0.0, start), end=max(start + 0.4, natural_end), section=section))
+        lyrics.append(LyricLine(
+            text=text,
+            start=max(0.0, start),
+            end=max(start + 0.4, natural_end),
+            section=section,
+            confidence=0.96,
+        ))
     if not lyrics:
         raise WorkflowError("No usable timestamped lyric lines were found within the audio duration.")
     return lyrics
@@ -518,6 +744,137 @@ def distribute_section_weighted_lyrics(lines: list[tuple[str, str]], audio_durat
     return lyrics
 
 
+def distribute_audio_assisted_section_lyrics(
+    lines: list[tuple[str, str]],
+    audio_duration: float,
+    audio_analysis: AudioAnalysis,
+) -> list[LyricLine]:
+    blocks: list[tuple[str, list[str]]] = []
+    for text, section in lines:
+        if not blocks or blocks[-1][0] != section:
+            blocks.append((section, []))
+        blocks[-1][1].append(text)
+
+    weighted_blocks = [(section, block_lines, section_weight(section)) for section, block_lines in blocks if block_lines]
+    total_weight = sum(weight for _, _, weight in weighted_blocks) or 1.0
+    active_start = choose_active_start(audio_analysis, audio_duration)
+    cursor = active_start
+    lyrics: list[LyricLine] = []
+
+    for index, (section, block_lines, weight) in enumerate(weighted_blocks):
+        remaining_duration = max(0.1, audio_duration - cursor)
+        block_duration = max(0.1, (audio_duration - active_start) * (weight / total_weight))
+        if index == len(weighted_blocks) - 1:
+            natural_end = audio_duration
+        else:
+            natural_end = min(audio_duration, cursor + block_duration)
+        boundary = choose_audio_boundary(
+            natural_end,
+            audio_analysis,
+            min_time=cursor + max(1.5, len(block_lines) * 0.8),
+            max_time=audio_duration,
+        )
+        block_end = min(audio_duration, max(cursor + 0.35, min(boundary, cursor + remaining_duration)))
+        lyrics.extend(distribute_lines_in_window(
+            block_lines,
+            cursor,
+            block_end,
+            section,
+            audio_analysis=audio_analysis,
+        ))
+        cursor = block_end
+
+    return lyrics
+
+
+def distribute_audio_assisted_even_lyrics(
+    lines: list[tuple[str, str]],
+    audio_duration: float,
+    audio_analysis: AudioAnalysis,
+) -> list[LyricLine]:
+    active_start = choose_active_start(audio_analysis, audio_duration)
+    active_end = choose_active_end(audio_analysis, audio_duration)
+    if active_end - active_start < max(8.0, len(lines) * 1.2):
+        active_start = 0.0
+        active_end = audio_duration
+    return distribute_lines_in_window(
+        [text for text, _ in lines],
+        active_start,
+        active_end,
+        "Lyrics",
+        audio_analysis=audio_analysis,
+    )
+
+
+def choose_active_start(audio_analysis: AudioAnalysis, audio_duration: float) -> float:
+    candidates = [audio_analysis.intro_silence_end]
+    if audio_analysis.likely_vocal_zones:
+        candidates.append(audio_analysis.likely_vocal_zones[0][0])
+    start = max(0.0, min(candidates))
+    if start > audio_duration * 0.25:
+        return 0.0
+    if start < 0.5:
+        return 0.0
+    return snap_to_grid(start, audio_analysis, max_shift=1.0)
+
+
+def choose_active_end(audio_analysis: AudioAnalysis, audio_duration: float) -> float:
+    if audio_analysis.likely_vocal_zones:
+        end = audio_analysis.likely_vocal_zones[-1][1]
+        if end >= audio_duration * 0.55:
+            return min(audio_duration, max(end, audio_duration - 1.0))
+    return audio_duration
+
+
+def choose_audio_boundary(
+    target: float,
+    audio_analysis: AudioAnalysis,
+    *,
+    min_time: float,
+    max_time: float,
+) -> float:
+    candidates = [
+        event_time
+        for event_time in audio_analysis.energy_change_times
+        if min_time <= event_time <= max_time and abs(event_time - target) <= 10.0
+    ]
+    for zone_start, zone_end in audio_analysis.chorus_zones:
+        for event_time in (zone_start, zone_end):
+            if min_time <= event_time <= max_time and abs(event_time - target) <= 10.0:
+                candidates.append(event_time)
+    if not candidates:
+        return snap_to_grid(target, audio_analysis, max_shift=1.0)
+    return snap_to_grid(min(candidates, key=lambda event_time: abs(event_time - target)), audio_analysis, max_shift=0.75)
+
+
+def snap_to_grid(time_value: float, audio_analysis: AudioAnalysis | None, max_shift: float = 0.75) -> float:
+    if audio_analysis is None or not audio_analysis.beat_times:
+        return time_value
+    nearest = min(audio_analysis.beat_times, key=lambda beat_time: abs(beat_time - time_value))
+    return nearest if abs(nearest - time_value) <= max_shift else time_value
+
+
+def line_confidence(start: float, end: float, section: str, audio_analysis: AudioAnalysis | None) -> float:
+    if audio_analysis is None:
+        return 0.58 if section != "Lyrics" else 0.45
+    confidence = 0.58
+    if in_any_zone(start, audio_analysis.likely_vocal_zones) or in_any_zone((start + end) / 2, audio_analysis.likely_vocal_zones):
+        confidence += 0.18
+    if section != "Lyrics":
+        confidence += 0.06
+    if audio_analysis.beat_times:
+        nearest = min(abs(beat_time - start) for beat_time in audio_analysis.beat_times)
+        if nearest <= 0.4:
+            confidence += 0.08
+    if in_any_zone(start, audio_analysis.chorus_zones) and "chorus" in section.lower():
+        confidence += 0.08
+    return min(0.92, max(0.35, confidence))
+
+
+def in_any_zone(time_value: float, zones: list[tuple[float, float]]) -> bool:
+    return any(start <= time_value <= end for start, end in zones)
+
+
 def section_weight(section: str) -> float:
     lower = section.lower()
     if "final" in lower and "chorus" in lower:
@@ -541,7 +898,14 @@ def distribute_even_lyrics(lines: list[tuple[str, str]], audio_duration: float) 
     return distribute_lines_in_window([text for text, _ in lines], 0.0, audio_duration, "Lyrics")
 
 
-def distribute_lines_in_window(lines: list[str], start: float, end: float, section: str) -> list[LyricLine]:
+def distribute_lines_in_window(
+    lines: list[str],
+    start: float,
+    end: float,
+    section: str,
+    *,
+    audio_analysis: AudioAnalysis | None = None,
+) -> list[LyricLine]:
     if not lines:
         return []
 
@@ -551,7 +915,7 @@ def distribute_lines_in_window(lines: list[str], start: float, end: float, secti
     lyrics: list[LyricLine] = []
 
     for index, text in enumerate(lines):
-        line_start = start + index * slot
+        line_start = snap_to_grid(start + index * slot, audio_analysis, max_shift=min(0.65, slot * 0.25))
         next_start = end if index == len(lines) - 1 else start + (index + 1) * slot
         available = max(0.35, next_start - line_start - gap)
         if slot >= 2.0:
@@ -561,7 +925,13 @@ def distribute_lines_in_window(lines: list[str], start: float, end: float, secti
         line_end = min(end, line_start + line_duration)
         if line_end <= line_start:
             line_end = min(end, line_start + 0.35)
-        lyrics.append(LyricLine(text=text, start=line_start, end=line_end, section=section))
+        lyrics.append(LyricLine(
+            text=text,
+            start=line_start,
+            end=line_end,
+            section=section,
+            confidence=line_confidence(line_start, line_end, section, audio_analysis),
+        ))
 
     return lyrics
 
@@ -845,6 +1215,7 @@ def write_timing_preview(project_name: str, lyrics: list[LyricLine]) -> Path:
             "end": round(lyric.end, 3),
             "text": lyric.text,
             "section": lyric.section,
+            "confidence": round(lyric.confidence, 3),
         }
         for lyric in lyrics
     ]
@@ -997,6 +1368,24 @@ def run_command(
     return result
 
 
+def run_binary_command(
+    command: list[str],
+    *,
+    description: str,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    result = subprocess.run(
+        command,
+        cwd=str(cwd or ROOT),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr_tail = "\n".join(result.stderr.decode("utf-8", errors="replace").strip().splitlines()[-12:])
+        raise WorkflowError(f"{description} failed with exit code {result.returncode}.\n{stderr_tail}")
+    return result
+
+
 def build_render_log(
     *,
     status: str,
@@ -1038,17 +1427,24 @@ def build_render_log(
         f"Lyric lines: {len(lyrics)}",
         f"Timing mode: {lyric_timing.mode}",
         f"Detected sections: {', '.join(lyric_timing.detected_sections) if lyric_timing.detected_sections else 'none'}",
+        f"Audio analysis: {lyric_timing.audio_analysis.summary if lyric_timing.audio_analysis else 'disabled or unavailable'}",
         "",
         "First timed lyric lines:",
     ])
     for index, lyric in enumerate(lyrics[:5], start=1):
-        lines.append(f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | {lyric.section} | {lyric.text}")
+        lines.append(
+            f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | "
+            f"{lyric.section} | confidence={lyric.confidence:.2f} | {lyric.text}"
+        )
 
     lines.append("")
     lines.append("Last timed lyric lines:")
     last_start_index = max(0, len(lyrics) - 5)
     for index, lyric in enumerate(lyrics[last_start_index:], start=last_start_index + 1):
-        lines.append(f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | {lyric.section} | {lyric.text}")
+        lines.append(
+            f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | "
+            f"{lyric.section} | confidence={lyric.confidence:.2f} | {lyric.text}"
+        )
 
     lines.extend(["", f"Scenes: {len(scenes)}"])
     for scene in scenes:
@@ -1073,7 +1469,7 @@ def write_failure_log(config_path: Path, config: dict[str, Any], error_message: 
         audio_path=repo_path(str(config.get("audio_file", ""))) if config.get("audio_file") else None,
         lyrics_path=repo_path(str(config.get("lyrics_file", ""))) if config.get("lyrics_file") else None,
         audio_duration=None,
-        lyric_timing=LyricTimingResult(detected_sections=[], lines=[], mode="unknown"),
+        lyric_timing=LyricTimingResult(audio_analysis=None, detected_sections=[], lines=[], mode="unknown"),
         scenes=[],
         output_path=output_paths["render_path"],
         timing_preview_path=None,
