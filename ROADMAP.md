@@ -11,24 +11,44 @@
 ## Current Status
 
 - Current stable baseline: `v1.1.0`
-- Current completed milestone: `v1.1`
-- Current next planning milestone: `v1.5`
-- Current working branch: `master`
-- Current next best step: continue small v1.5-style release-readiness hardening on `master`, starting with review-inbox scanability and clarity.
+- Current completed milestone: `v1.7.0-alpha`
+- Current next planning milestone: `v1.8/operator-ux-pass`
+- Current working branch: `v1.8/operator-ux-pass`
+- Current next best step: start the activity/event log foundation before broader UI polish so operator-visible history exists first.
 
 Baseline notes:
 - `v1.1-rc.1` remains the release-candidate QA tag.
 - `v1.1.0` is the stable baseline tag for v1.5 planning and implementation.
+- `v1.7.0-alpha` is the stabilized core workflow checkpoint on `master`.
 - `docs/roadmap/v1.5-release-readiness.md` is the active v1.5 plan.
 - `docs/roadmap/v1.5-system-organization.md` is earlier foundation planning and remains useful as context for completed organization work.
 - Older branch references such as `feature/v1.5-task-separation` and `feature/v1.6-intelligence-layer` should now be treated as historical planning/release context rather than the active execution line.
-- Current `master` includes forward-only stabilization work, including duplicate-plan prevention and visible `IN_FACTORY` workflow state hardening.
+- `master` now contains the pushed post-release ignore cleanup for local runtime/user input assets.
+- v1.8 is operator UX and control-layer work, while autonomy/v2 remains deferred until operator visibility and event history exist.
 
 Fresh validation notes:
 - 2026-05-08 manual QA on `master` confirmed visible `IN_FACTORY` state, persisted revision notes, and successful task creation after approving a fresh review plan.
-- Use `QA_PASS_REPORT.md` and `docs/CURRENT_STATE.md` as the current operational record for active `master` behavior.
+- The v1.7.0-alpha release tag is published and should be treated as the stable checkpoint before v1.8 UX work.
+- Use `QA_PASS_REPORT.md` and `docs/CURRENT_STATE.md` as the current operational record for active behavior.
 
 ## Next Planning Phases
+
+### v1.8/operator-ux-pass
+
+Goal: improve operator visibility, control, and trust around the stabilized workflow without expanding the workflow engine.
+
+Included direction:
+- Operator UX pass
+- workflow status visibility
+- Review Inbox filters
+- Task Board organization
+- activity/event log foundation
+- safety/notice polish
+
+Guardrails:
+- Treat `v1.7.0-alpha` as the stabilized core workflow checkpoint.
+- Keep v1.8 focused on UX/control-layer work, not engine expansion.
+- Defer autonomy/v2 until operator visibility and event history exist.
 
 ### v1.5 - Release Readiness
 

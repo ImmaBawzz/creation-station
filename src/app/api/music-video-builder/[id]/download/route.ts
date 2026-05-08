@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 
@@ -35,8 +35,8 @@ function contentTypeFor(file: string): string {
 }
 
 export async function GET(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
+  request: NextRequest,
+  context: RouteContext<"/api/music-video-builder/[id]/download">,
 ) {
   const { id } = await context.params;
   const fileKey = new URL(request.url).searchParams.get("file") ?? "";
