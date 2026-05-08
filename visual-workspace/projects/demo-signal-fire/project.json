@@ -1,0 +1,13 @@
+{
+  "id": "demo-signal-fire",
+  "name": "Demo Signal Fire",
+  "kind": "lyric_video",
+  "status": "assets_missing",
+  "audioFile": null,
+  "lyricsFile": null,
+  "imageFiles": [],
+  "videoFiles": [],
+  "outputFolder": "visual-workspace/projects/demo-signal-fire/renders",
+  "createdAt": "2026-05-08T00:00:00.000Z",
+  "updatedAt": "2026-05-08T00:00:00.000Z"
+}
