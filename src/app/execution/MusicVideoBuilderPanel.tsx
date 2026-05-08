@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { MusicVideoWorkflowPreset } from "@/lib/music-video-workflows";
 
@@ -14,12 +14,15 @@ type BuilderStatus =
   | "running";
 
 type BuilderResponse = {
-  downloads: Record<string, string> | null;
-  request: {
-    error: string;
-    id: string;
-    status: BuilderStatus | string;
-  };
+  details?: string;
+  error?: string;
+  logPath?: string;
+  message?: string;
+  ok: boolean;
+  outputPath?: string;
+  status: BuilderStatus | "queued" | string;
+  timingPreviewPath?: string;
+  workflowConfigPath?: string;
 };
 
 const progressSteps = [
@@ -34,6 +37,10 @@ const progressSteps = [
 function normalizedStatus(status: string): BuilderStatus {
   if (status === "running") {
     return "rendering";
+  }
+
+  if (status === "queued") {
+    return "pending";
   }
 
   if (
@@ -67,6 +74,53 @@ function stepState(status: string, step: string): "active" | "done" | "idle" | "
   return stepIndex < activeIndex ? "done" : "idle";
 }
 
+function isJsonResponse(response: Response): boolean {
+  return response.headers.get("content-type")?.toLowerCase().includes("application/json") ?? false;
+}
+
+async function readBuilderPayload(response: Response): Promise<BuilderResponse> {
+  const rawBody = await response.text();
+
+  if (!rawBody.trim()) {
+    return {
+      details: `HTTP ${response.status} returned an empty response body.`,
+      error: "The music video server returned an empty response.",
+      ok: false,
+      status: "failed",
+    };
+  }
+
+  if (!isJsonResponse(response)) {
+    return {
+      details: rawBody.slice(0, 500),
+      error: "The music video server returned a non-JSON response.",
+      ok: false,
+      status: "failed",
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as unknown;
+    if (parsed && typeof parsed === "object" && "ok" in parsed) {
+      return parsed as BuilderResponse;
+    }
+  } catch (parseError) {
+    return {
+      details: parseError instanceof Error ? parseError.message : "Invalid JSON response.",
+      error: "The music video server returned invalid JSON.",
+      ok: false,
+      status: "failed",
+    };
+  }
+
+  return {
+    details: rawBody.slice(0, 500),
+    error: "The music video server returned an unexpected response.",
+    ok: false,
+    status: "failed",
+  };
+}
+
 export function MusicVideoBuilderPanel({
   workflowPresets,
 }: {
@@ -74,11 +128,12 @@ export function MusicVideoBuilderPanel({
 }) {
   const defaultPresetId = workflowPresets[0]?.id ?? "";
   const [error, setError] = useState("");
+  const [selectedAudioName, setSelectedAudioName] = useState("");
+  const [selectedImageName, setSelectedImageName] = useState("");
+  const [selectedLyricsFileName, setSelectedLyricsFileName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestState, setRequestState] = useState<BuilderResponse | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState(defaultPresetId);
-  const activeRequestId = requestState?.request.id ?? "";
-  const terminal = ["completed", "failed"].includes(requestState?.request.status ?? "");
   const formRef = useRef<HTMLFormElement>(null);
 
   const selectedPreset = useMemo(
@@ -90,83 +145,47 @@ export function MusicVideoBuilderPanel({
   );
 
   const statusLabel = useMemo(() => {
-    const status = normalizedStatus(requestState?.request.status ?? "pending");
+    const status = normalizedStatus(requestState?.status ?? "pending");
     const current = progressSteps.find((step) => step.key === status);
     return current?.label ?? "Queued";
-  }, [requestState?.request.status]);
-
-  useEffect(() => {
-    if (!activeRequestId || terminal) {
-      return;
-    }
-
-    let cancelled = false;
-    const interval = window.setInterval(async () => {
-      try {
-        const response = await fetch(`/api/music-video-builder/${activeRequestId}`, {
-          cache: "no-store",
-        });
-        const payload = await response.json() as BuilderResponse;
-
-        if (!cancelled && response.ok) {
-          setRequestState(payload);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Could not refresh builder progress.");
-        }
-      }
-    }, 1_500);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [activeRequestId, terminal]);
+  }, [requestState?.status]);
 
   async function submitBuilder(formData: FormData) {
     setError("");
     setIsSubmitting(true);
-    setRequestState(null);
+    setRequestState({
+      message: "Validating assets and rendering local workflow...",
+      ok: true,
+      status: "rendering",
+    });
 
     try {
       const response = await fetch("/api/music-video-builder", {
         body: formData,
         method: "POST",
       });
-      const payload = await response.json() as BuilderResponse | { error: string };
+      const payload = await readBuilderPayload(response);
 
-      if (!response.ok) {
-        setError("error" in payload ? payload.error : "Music video request failed.");
+      if (!response.ok || !payload.ok) {
+        setRequestState(payload);
+        setError([payload.error, payload.details].filter(Boolean).join(" "));
         return;
       }
 
-      const nextState = payload as BuilderResponse;
-      setRequestState(nextState);
+      setRequestState(payload);
       formRef.current?.reset();
-
-      void fetch("/api/worker/tick", {
-        body: JSON.stringify({
-          actionLimits: { music_video_builder_v1: 1 },
-          workerId: "music-video-builder-ui",
-        }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }).then(async (workerResponse) => {
-        if (!workerResponse.ok) {
-          setError("Worker did not accept the music video request.");
-        }
-
-        const statusResponse = await fetch(`/api/music-video-builder/${nextState.request.id}`, {
-          cache: "no-store",
-        });
-
-        if (statusResponse.ok) {
-          setRequestState(await statusResponse.json() as BuilderResponse);
-        }
-      }).catch(() => {
-        setError("Worker could not start the music video request.");
+      setSelectedAudioName("");
+      setSelectedImageName("");
+      setSelectedLyricsFileName("");
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Music video request failed.";
+      setRequestState({
+        details: message,
+        error: "Music video request failed before the server returned a response.",
+        ok: false,
+        status: "failed",
       });
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -178,8 +197,8 @@ export function MusicVideoBuilderPanel({
         <div>
           <h3 className="text-xl font-semibold">End-to-End Music Video Builder</h3>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
-            Upload audio, choose a visual workflow, render through ComfyUI, merge with FFmpeg,
-            and export a release package.
+            Upload audio, add lyrics, choose a source image or placeholders, render locally with
+            FFmpeg, and export a lyric video test package.
           </p>
         </div>
         <span className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold text-fuchsia-100">
@@ -214,9 +233,13 @@ export function MusicVideoBuilderPanel({
               className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-fuchsia-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
               id="builder-audio"
               name="audio"
+              onChange={(event) => setSelectedAudioName(event.currentTarget.files?.[0]?.name ?? "")}
               required
               type="file"
             />
+            <p className="mt-1 text-xs text-zinc-500">
+              {selectedAudioName || "No audio selected"}
+            </p>
           </div>
 
           <div>
@@ -242,8 +265,12 @@ export function MusicVideoBuilderPanel({
                 className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-zinc-100"
                 id="builder-source-image"
                 name="sourceImage"
+                onChange={(event) => setSelectedImageName(event.currentTarget.files?.[0]?.name ?? "")}
                 type="file"
               />
+              <p className="mt-1 text-xs text-zinc-500">
+                {selectedImageName || "Placeholder visuals if empty"}
+              </p>
             </div>
 
             <div>
@@ -258,6 +285,37 @@ export function MusicVideoBuilderPanel({
                 placeholder="180"
                 type="number"
               />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
+            <div>
+              <label className="text-xs font-medium text-zinc-500" htmlFor="builder-lyrics-text">
+                Lyrics
+              </label>
+              <textarea
+                className="mt-1 min-h-36 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm leading-relaxed outline-none focus:border-fuchsia-500"
+                id="builder-lyrics-text"
+                name="lyricsText"
+                placeholder={"[Intro]\nI saw the skyline flicker in the rain\n\n[Chorus]\nSignal fire, carry me home"}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-zinc-500" htmlFor="builder-lyrics-file">
+                Lyrics file
+              </label>
+              <input
+                accept=".txt,.lrc,text/plain"
+                className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-zinc-100"
+                id="builder-lyrics-file"
+                name="lyricsFile"
+                onChange={(event) => setSelectedLyricsFileName(event.currentTarget.files?.[0]?.name ?? "")}
+                type="file"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                {selectedLyricsFileName || "Demo lyrics if empty"}
+              </p>
             </div>
           </div>
 
@@ -312,7 +370,7 @@ export function MusicVideoBuilderPanel({
             className="rounded-2xl bg-fuchsia-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Queueing..." : "Create Video Package"}
+            {isSubmitting ? "Rendering..." : "Create Video Package"}
           </button>
         </form>
 
@@ -322,16 +380,16 @@ export function MusicVideoBuilderPanel({
               <p className="font-semibold text-zinc-100">Progress</p>
               <p className="mt-1 text-sm text-zinc-400">{statusLabel}</p>
             </div>
-            {activeRequestId && (
+            {requestState?.status && (
               <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
-                {activeRequestId.slice(0, 8)}
+                {requestState.status}
               </span>
             )}
           </div>
 
           <div className="mt-5 space-y-3">
             {progressSteps.map((step) => {
-              const state = stepState(requestState?.request.status ?? "pending", step.key);
+              const state = stepState(requestState?.status ?? "pending", step.key);
               const stateClass = state === "done"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
                 : state === "active"
@@ -354,31 +412,44 @@ export function MusicVideoBuilderPanel({
             })}
           </div>
 
-          {requestState?.request.error && (
+          {requestState?.error && (
             <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
-              {requestState.request.error}
+              {[requestState.error, requestState.details].filter(Boolean).join(" ")}
             </p>
           )}
 
-          {requestState?.downloads && (
-            <div className="mt-5">
-              <p className="font-semibold text-zinc-100">Download package</p>
-              <div className="mt-3 grid gap-2 text-sm">
-                {[
-                  ["Final MP4", requestState.downloads.finalMp4],
-                  ["Thumbnail", requestState.downloads.thumbnail],
-                  ["Workflow JSON", requestState.downloads.workflow],
-                  ["Prompt Text", requestState.downloads.promptText],
-                  ["Metadata", requestState.downloads.metadata],
-                ].map(([label, href]) => (
-                  <a
-                    className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 transition hover:border-fuchsia-500/40 hover:bg-zinc-800"
-                    href={href}
-                    key={label}
-                  >
-                    {label}
-                  </a>
-                ))}
+          {requestState?.message && !requestState.error && (
+            <p className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-3 text-sm text-zinc-200">
+              {requestState.message}
+            </p>
+          )}
+
+          {requestState?.ok && requestState.outputPath && (
+            <div className="mt-5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+              <p className="font-semibold text-emerald-100">Output ready</p>
+              <div className="mt-3 grid gap-2 text-sm text-emerald-50/90">
+                <p>
+                  <span className="text-emerald-200/70">Video:</span>{" "}
+                  <code className="break-all">{requestState.outputPath}</code>
+                </p>
+                {requestState.logPath && (
+                  <p>
+                    <span className="text-emerald-200/70">Log:</span>{" "}
+                    <code className="break-all">{requestState.logPath}</code>
+                  </p>
+                )}
+                {requestState.timingPreviewPath && (
+                  <p>
+                    <span className="text-emerald-200/70">Timing:</span>{" "}
+                    <code className="break-all">{requestState.timingPreviewPath}</code>
+                  </p>
+                )}
+                {requestState.workflowConfigPath && (
+                  <p>
+                    <span className="text-emerald-200/70">Config:</span>{" "}
+                    <code className="break-all">{requestState.workflowConfigPath}</code>
+                  </p>
+                )}
               </div>
             </div>
           )}

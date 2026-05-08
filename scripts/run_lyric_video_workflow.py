@@ -31,7 +31,18 @@ OUTPUT_DIRS = (
 SUPPORTED_VIDEO_EXTENSIONS = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 SUPPORTED_IMAGE_EXTENSIONS = {".bmp", ".jpeg", ".jpg", ".png", ".webp"}
 LRC_TIMESTAMP_RE = re.compile(r"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]")
+SECTION_HEADER_RE = re.compile(r"^\[([A-Za-z][A-Za-z0-9 -]{0,40})\]$")
 SAFE_PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+
+SECTION_WEIGHTS = {
+    "intro": 0.07,
+    "verse": 0.22,
+    "pre-chorus": 0.12,
+    "chorus": 0.18,
+    "verse 2": 0.20,
+    "final chorus": 0.28,
+    "outro": 0.07,
+}
 
 
 class WorkflowError(RuntimeError):
@@ -43,6 +54,14 @@ class LyricLine:
     text: str
     start: float
     end: float
+    section: str = "Lyrics"
+
+
+@dataclass(frozen=True)
+class LyricTimingResult:
+    detected_sections: list[str]
+    lines: list[LyricLine]
+    mode: str
 
 
 @dataclass(frozen=True)
@@ -70,6 +89,11 @@ def main() -> int:
         default=str(DEFAULT_CONFIG_PATH),
         help="Path to a workflow JSON config. Defaults to config/lyric_video_test_workflow.json.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate config/assets and write lyric timing preview without rendering the final video.",
+    )
     args = parser.parse_args()
 
     ensure_folder_structure()
@@ -81,7 +105,9 @@ def main() -> int:
     try:
         config = load_config(config_path)
         project_name = get_project_name(config)
-        output_paths = build_output_paths(project_name)
+        output_paths = build_output_paths(project_name, config)
+        output_paths["render_path"].parent.mkdir(parents=True, exist_ok=True)
+        output_paths["log_path"].parent.mkdir(parents=True, exist_ok=True)
 
         require_binary("ffprobe")
         require_binary("ffmpeg")
@@ -96,11 +122,33 @@ def main() -> int:
         validate_optional_visual_inputs(config)
 
         audio_duration = inspect_audio_duration(audio_path)
-        lyrics = parse_lyrics(lyrics_path, audio_duration)
+        lyric_timing = parse_lyrics(lyrics_path, audio_duration)
+        lyrics = lyric_timing.lines
         scenes = prepare_scene_timing(config, audio_duration)
 
         temp_dir = output_paths["temp_dir"]
         temp_dir.mkdir(parents=True, exist_ok=True)
+        timing_preview_path = write_timing_preview(project_name, lyrics)
+
+        if args.dry_run:
+            log_lines = build_render_log(
+                status="DRY_RUN",
+                config_path=config_path,
+                config=config,
+                audio_path=audio_path,
+                lyrics_path=lyrics_path,
+                audio_duration=audio_duration,
+                lyric_timing=lyric_timing,
+                scenes=scenes,
+                output_path=output_paths["render_path"],
+                timing_preview_path=timing_preview_path,
+                error_message=None,
+            )
+            output_paths["log_path"].write_text("\n".join(log_lines) + "\n", encoding="utf-8")
+            print(f"Dry-run validation complete: {display_path(config_path)}")
+            print(f"Timing preview: {display_path(timing_preview_path)}")
+            print(f"Render log: {display_path(output_paths['log_path'])}")
+            return 0
 
         ass_path = temp_dir / f"{project_name}_lyrics.ass"
         visuals_path = temp_dir / f"{project_name}_visuals.mp4"
@@ -132,9 +180,10 @@ def main() -> int:
             audio_path=audio_path,
             lyrics_path=lyrics_path,
             audio_duration=audio_duration,
-            lyrics=lyrics,
+            lyric_timing=lyric_timing,
             scenes=scenes,
             output_path=output_paths["render_path"],
+            timing_preview_path=timing_preview_path,
             error_message=None,
         )
         output_paths["log_path"].write_text("\n".join(log_lines) + "\n", encoding="utf-8")
@@ -197,8 +246,9 @@ def get_project_name(config: dict[str, Any]) -> str:
     return project_name
 
 
-def build_output_paths(project_name: str) -> dict[str, Path]:
-    render_path = ROOT / "output" / "renders" / f"{project_name}_lyric_video_test.mp4"
+def build_output_paths(project_name: str, config: dict[str, Any] | None = None) -> dict[str, Path]:
+    output_file = optional_string((config or {}).get("output_file", ""))
+    render_path = repo_path(output_file) if output_file else ROOT / "output" / "renders" / f"{project_name}_lyric_video_test.mp4"
     log_path = ROOT / "output" / "logs" / f"{project_name}_render_log.txt"
     temp_dir = ROOT / "output" / "temp" / project_name
     return {
@@ -265,6 +315,9 @@ def parse_resolution(config: dict[str, Any]) -> tuple[int, int]:
     if isinstance(resolution, dict):
         width = positive_int(resolution.get("width"), "resolution.width")
         height = positive_int(resolution.get("height"), "resolution.height")
+    elif isinstance(resolution, list) and len(resolution) == 2:
+        width = positive_int(resolution[0], "resolution[0]")
+        height = positive_int(resolution[1], "resolution[1]")
     elif isinstance(resolution, str) and "x" in resolution.lower():
         width_value, height_value = resolution.lower().split("x", 1)
         width = positive_int(width_value, "resolution width")
@@ -330,61 +383,186 @@ def inspect_audio_duration(audio_path: Path) -> float:
     return duration
 
 
-def parse_lyrics(lyrics_path: Path, audio_duration: float) -> list[LyricLine]:
+def parse_lyrics(lyrics_path: Path, audio_duration: float) -> LyricTimingResult:
     raw_lines = lyrics_path.read_text(encoding="utf-8-sig").splitlines()
-    lrc_entries = parse_lrc_entries(raw_lines)
-    if lrc_entries:
-        return prepare_lrc_timing(lrc_entries, audio_duration)
-    return distribute_plain_lyrics(raw_lines, audio_duration)
+    parsed = parse_lyric_source(raw_lines)
+
+    if not parsed["plain_lines"]:
+        raise WorkflowError("Lyrics file is empty. Add plain lyric lines or .lrc timestamped lyrics.")
+
+    timestamped_count = len(parsed["timestamped"])
+    total_lines = len(parsed["plain_lines"])
+    detected_sections = parsed["detected_sections"]
+
+    if timestamped_count and timestamped_count >= max(1, math.ceil(total_lines * 0.6)):
+        return LyricTimingResult(
+            detected_sections=detected_sections,
+            lines=prepare_lrc_timing(parsed["timestamped"], audio_duration),
+            mode="manual_lrc",
+        )
+
+    if detected_sections:
+        return LyricTimingResult(
+            detected_sections=detected_sections,
+            lines=distribute_section_weighted_lyrics(parsed["plain_lines"], audio_duration),
+            mode="section_weighted",
+        )
+
+    return LyricTimingResult(
+        detected_sections=[],
+        lines=distribute_even_lyrics(parsed["plain_lines"], audio_duration),
+        mode="even_fallback",
+    )
 
 
-def parse_lrc_entries(raw_lines: list[str]) -> list[tuple[float, str]]:
-    entries: list[tuple[float, str]] = []
+def parse_lyric_source(raw_lines: list[str]) -> dict[str, Any]:
+    current_section = "Lyrics"
+    detected_sections: list[str] = []
+    plain_lines: list[tuple[str, str]] = []
+    timestamped: list[tuple[float, str, str]] = []
+
     for raw_line in raw_lines:
-        matches = list(LRC_TIMESTAMP_RE.finditer(raw_line))
-        if not matches:
+        line = raw_line.strip()
+        if not line:
             continue
-        lyric_text = raw_line[matches[-1].end() :].strip()
-        if not lyric_text:
+
+        section_match = SECTION_HEADER_RE.fullmatch(line)
+        timestamp_match = LRC_TIMESTAMP_RE.match(line)
+        if section_match and not timestamp_match:
+            current_section = normalize_section_name(section_match.group(1))
+            if current_section not in detected_sections:
+                detected_sections.append(current_section)
             continue
-        for match in matches:
-            minutes = int(match.group(1))
-            seconds = int(match.group(2))
-            fraction_text = match.group(3) or "0"
-            if len(fraction_text) == 3:
-                fraction = int(fraction_text) / 1000
-            elif len(fraction_text) == 2:
-                fraction = int(fraction_text) / 100
-            else:
-                fraction = int(fraction_text) / 10
-            entries.append((minutes * 60 + seconds + fraction, lyric_text))
-    return sorted(entries, key=lambda item: item[0])
+
+        if timestamp_match:
+            lyric_text = line[timestamp_match.end() :].strip()
+            if not lyric_text:
+                continue
+            start = timestamp_to_seconds(timestamp_match)
+            timestamped.append((start, lyric_text, current_section))
+            plain_lines.append((lyric_text, current_section))
+            continue
+
+        plain_lines.append((line, current_section))
+
+    return {
+        "detected_sections": detected_sections,
+        "plain_lines": plain_lines,
+        "timestamped": sorted(timestamped, key=lambda item: item[0]),
+    }
 
 
-def prepare_lrc_timing(entries: list[tuple[float, str]], audio_duration: float) -> list[LyricLine]:
+def normalize_section_name(value: str) -> str:
+    cleaned = re.sub(r"\s+", " ", value.strip())
+    lower = cleaned.lower()
+    if lower in {"prechorus", "pre chorus"}:
+        return "Pre-Chorus"
+    if lower == "final chorus":
+        return "Final Chorus"
+    return cleaned.title().replace("Pre-Chorus", "Pre-Chorus")
+
+
+def timestamp_to_seconds(match: re.Match[str]) -> float:
+    minutes = int(match.group(1))
+    seconds = int(match.group(2))
+    fraction_text = match.group(3) or "0"
+    if len(fraction_text) == 3:
+        fraction = int(fraction_text) / 1000
+    elif len(fraction_text) == 2:
+        fraction = int(fraction_text) / 100
+    else:
+        fraction = int(fraction_text) / 10
+    return minutes * 60 + seconds + fraction
+
+
+def prepare_lrc_timing(entries: list[tuple[float, str, str]], audio_duration: float) -> list[LyricLine]:
     lyrics: list[LyricLine] = []
-    for index, (start, text) in enumerate(entries):
+    for index, (start, text, section) in enumerate(entries):
         if start >= audio_duration:
             continue
         next_start = entries[index + 1][0] if index + 1 < len(entries) else audio_duration
-        end = min(audio_duration, max(start + 0.1, next_start))
-        lyrics.append(LyricLine(text=text, start=max(0.0, start), end=end))
+        natural_end = min(audio_duration, max(start + 0.4, next_start - 0.15))
+        if natural_end - start > 5.5:
+            natural_end = start + 5.5
+        elif natural_end - start < 1.8 and next_start - start >= 1.8:
+            natural_end = min(audio_duration, start + 1.8)
+        lyrics.append(LyricLine(text=text, start=max(0.0, start), end=max(start + 0.4, natural_end), section=section))
     if not lyrics:
         raise WorkflowError("No usable timestamped lyric lines were found within the audio duration.")
     return lyrics
 
 
-def distribute_plain_lyrics(raw_lines: list[str], audio_duration: float) -> list[LyricLine]:
-    lines = [line.strip() for line in raw_lines if line.strip()]
-    if not lines:
-        raise WorkflowError("Lyrics file is empty. Add plain lyric lines or .lrc timestamped lyrics.")
+def distribute_section_weighted_lyrics(lines: list[tuple[str, str]], audio_duration: float) -> list[LyricLine]:
+    blocks: list[tuple[str, list[str]]] = []
+    for text, section in lines:
+        if not blocks or blocks[-1][0] != section:
+            blocks.append((section, []))
+        blocks[-1][1].append(text)
 
-    slot = audio_duration / len(lines)
+    weighted_blocks = [(section, block_lines, section_weight(section)) for section, block_lines in blocks if block_lines]
+    total_weight = sum(weight for _, _, weight in weighted_blocks) or 1.0
+    cursor = 0.0
     lyrics: list[LyricLine] = []
-    for index, line in enumerate(lines):
-        start = index * slot
-        end = audio_duration if index == len(lines) - 1 else (index + 1) * slot
-        lyrics.append(LyricLine(text=line, start=start, end=max(start + 0.1, end)))
+
+    for index, (section, block_lines, weight) in enumerate(weighted_blocks):
+        remaining_duration = max(0.1, audio_duration - cursor)
+        block_duration = audio_duration * (weight / total_weight)
+        if index == len(weighted_blocks) - 1:
+            block_duration = remaining_duration
+        else:
+            block_duration = min(block_duration, remaining_duration)
+        block_end = min(audio_duration, cursor + block_duration)
+        lyrics.extend(distribute_lines_in_window(block_lines, cursor, block_end, section))
+        cursor = block_end
+
+    return lyrics
+
+
+def section_weight(section: str) -> float:
+    lower = section.lower()
+    if "final" in lower and "chorus" in lower:
+        return SECTION_WEIGHTS["final chorus"]
+    if "pre" in lower and "chorus" in lower:
+        return SECTION_WEIGHTS["pre-chorus"]
+    if "verse 2" in lower or "verse ii" in lower:
+        return SECTION_WEIGHTS["verse 2"]
+    if "intro" in lower:
+        return SECTION_WEIGHTS["intro"]
+    if "verse" in lower:
+        return SECTION_WEIGHTS["verse"]
+    if "chorus" in lower:
+        return SECTION_WEIGHTS["chorus"]
+    if "outro" in lower:
+        return SECTION_WEIGHTS["outro"]
+    return 0.12
+
+
+def distribute_even_lyrics(lines: list[tuple[str, str]], audio_duration: float) -> list[LyricLine]:
+    return distribute_lines_in_window([text for text, _ in lines], 0.0, audio_duration, "Lyrics")
+
+
+def distribute_lines_in_window(lines: list[str], start: float, end: float, section: str) -> list[LyricLine]:
+    if not lines:
+        return []
+
+    window_duration = max(0.1, end - start)
+    slot = window_duration / len(lines)
+    gap = min(0.28, max(0.08, slot * 0.08))
+    lyrics: list[LyricLine] = []
+
+    for index, text in enumerate(lines):
+        line_start = start + index * slot
+        next_start = end if index == len(lines) - 1 else start + (index + 1) * slot
+        available = max(0.35, next_start - line_start - gap)
+        if slot >= 2.0:
+            line_duration = min(5.5, max(1.8, available))
+        else:
+            line_duration = available
+        line_end = min(end, line_start + line_duration)
+        if line_end <= line_start:
+            line_end = min(end, line_start + 0.35)
+        lyrics.append(LyricLine(text=text, start=line_start, end=line_end, section=section))
+
     return lyrics
 
 
@@ -658,6 +836,22 @@ def concatenate_scene_clips(scene_paths: list[Path], output_path: Path, temp_dir
     run_command(command, cwd=temp_dir, description="Concatenate scene clips")
 
 
+def write_timing_preview(project_name: str, lyrics: list[LyricLine]) -> Path:
+    preview_path = ROOT / "output" / "temp" / f"{project_name}_lyric_timing_preview.json"
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    preview = [
+        {
+            "start": round(lyric.start, 3),
+            "end": round(lyric.end, 3),
+            "text": lyric.text,
+            "section": lyric.section,
+        }
+        for lyric in lyrics
+    ]
+    preview_path.write_text(json.dumps(preview, indent=2), encoding="utf-8")
+    return preview_path
+
+
 def write_ass_subtitles(
     ass_path: Path,
     lyrics: list[LyricLine],
@@ -811,9 +1005,10 @@ def build_render_log(
     audio_path: Path | None,
     lyrics_path: Path | None,
     audio_duration: float | None,
-    lyrics: list[LyricLine],
+    lyric_timing: LyricTimingResult,
     scenes: list[SceneSegment],
     output_path: Path | None,
+    timing_preview_path: Path | None,
     error_message: str | None,
 ) -> list[str]:
     lines = [
@@ -832,14 +1027,28 @@ def build_render_log(
         lines.append(f"Audio duration: {audio_duration:.3f}s")
     if output_path is not None:
         lines.append(f"Output file: {display_path(output_path)}")
+    if timing_preview_path is not None:
+        lines.append(f"Timing preview: {display_path(timing_preview_path)}")
     if error_message:
         lines.extend(["", "Error:", error_message])
 
-    lines.extend(["", f"Lyric lines: {len(lyrics)}"])
-    for index, lyric in enumerate(lyrics[:10], start=1):
-        lines.append(f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | {lyric.text}")
-    if len(lyrics) > 10:
-        lines.append(f"... {len(lyrics) - 10} more lyric lines")
+    lyrics = lyric_timing.lines
+    lines.extend([
+        "",
+        f"Lyric lines: {len(lyrics)}",
+        f"Timing mode: {lyric_timing.mode}",
+        f"Detected sections: {', '.join(lyric_timing.detected_sections) if lyric_timing.detected_sections else 'none'}",
+        "",
+        "First timed lyric lines:",
+    ])
+    for index, lyric in enumerate(lyrics[:5], start=1):
+        lines.append(f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | {lyric.section} | {lyric.text}")
+
+    lines.append("")
+    lines.append("Last timed lyric lines:")
+    last_start_index = max(0, len(lyrics) - 5)
+    for index, lyric in enumerate(lyrics[last_start_index:], start=last_start_index + 1):
+        lines.append(f"{index:02}. {lyric.start:.2f}s -> {lyric.end:.2f}s | {lyric.section} | {lyric.text}")
 
     lines.extend(["", f"Scenes: {len(scenes)}"])
     for scene in scenes:
@@ -855,7 +1064,7 @@ def write_failure_log(config_path: Path, config: dict[str, Any], error_message: 
         project_name = get_project_name(config)
     except WorkflowError:
         project_name = "lyric_video_test"
-    output_paths = build_output_paths(project_name)
+    output_paths = build_output_paths(project_name, config)
     output_paths["log_path"].parent.mkdir(parents=True, exist_ok=True)
     log_lines = build_render_log(
         status="FAILED",
@@ -864,9 +1073,10 @@ def write_failure_log(config_path: Path, config: dict[str, Any], error_message: 
         audio_path=repo_path(str(config.get("audio_file", ""))) if config.get("audio_file") else None,
         lyrics_path=repo_path(str(config.get("lyrics_file", ""))) if config.get("lyrics_file") else None,
         audio_duration=None,
-        lyrics=[],
+        lyric_timing=LyricTimingResult(detected_sections=[], lines=[], mode="unknown"),
         scenes=[],
         output_path=output_paths["render_path"],
+        timing_preview_path=None,
         error_message=error_message,
     )
     output_paths["log_path"].write_text("\n".join(log_lines) + "\n", encoding="utf-8")
