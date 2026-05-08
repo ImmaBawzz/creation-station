@@ -1,16 +1,18 @@
 import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { readVisualProjectManifest, relativeProjectPath } from "@/modules/visual-engine/manifest";
+import {
+  readVisualProjectManifest,
+  relativeProjectPath,
+  resolveVisualProjectMedia,
+} from "@/modules/visual-engine/manifest";
 import {
   getVisualProjectAssetFolders,
-  getVisualProjectRoot,
   resolveVisualProjectPath,
 } from "@/modules/visual-engine/paths";
 import { validateVisualProjectById } from "@/modules/visual-engine/validate";
-import type { VisualEngineRenderResult } from "@/modules/visual-engine/types";
 import { packageProject } from "@/modules/visual-engine/export/packageProject";
 
 const execFileAsync = promisify(execFile);
@@ -39,7 +41,17 @@ async function runCommand(executable: string, args: string[]): Promise<void> {
       windowsHide: true,
     });
   } catch (error) {
-    const details = error instanceof Error ? error.message : "command failed";
+    const commandError = error as NodeJS.ErrnoException & { stderr?: string };
+
+    if (commandError?.code === "ENOENT") {
+      throw createRenderError(
+        `FFmpeg is not available. Set FFMPEG_PATH to a valid executable before rendering.`,
+        503,
+        [`Missing executable: ${executable}`],
+      );
+    }
+
+    const details = commandError?.stderr?.trim() || commandError?.message || "command failed";
     throw createRenderError(`FFmpeg pipeline failed: ${details}`, 500);
   }
 }
@@ -67,8 +79,18 @@ async function getAudioDuration(audioPath: string): Promise<number> {
 
     return duration;
   } catch (error) {
+    const probeError = error as NodeJS.ErrnoException & { stderr?: string };
+
+    if (probeError?.code === "ENOENT") {
+      throw createRenderError(
+        `FFprobe is not available. Set FFPROBE_PATH to a valid executable before rendering.`,
+        503,
+        [`Missing executable: ${DEFAULT_FFPROBE_PATH}`],
+      );
+    }
+
     throw createRenderError(
-      `Could not inspect audio duration: ${error instanceof Error ? error.message : "ffprobe failed"}`,
+      `Could not inspect audio duration: ${probeError?.stderr?.trim() || probeError?.message || "ffprobe failed"}`,
       500,
     );
   }
@@ -169,7 +191,7 @@ async function mergeAudioVideo({
   ]);
 }
 
-export async function renderProject(projectId: string): Promise<VisualEngineRenderResult> {
+export async function renderProject(projectId: string) {
   const project = await readVisualProjectManifest(projectId);
 
   if (!project) {
@@ -182,43 +204,34 @@ export async function renderProject(projectId: string): Promise<VisualEngineRend
     throw createRenderError("Visual Engine project validation failed.", 404);
   }
 
-  const renderBlockingErrors = validation.errors.filter(
-    (error) => error !== "Missing image files" && error !== "Missing video files",
-  );
-
-  if (renderBlockingErrors.length > 0) {
-    throw createRenderError("Project assets are not ready for rendering.", 400, renderBlockingErrors);
+  if (validation.errors.length > 0) {
+    throw createRenderError("Project assets are not ready for rendering.", 400, validation.errors);
   }
 
-  const primaryVideo = project.videoFiles[0] ?? null;
-  const primaryImage = project.imageFiles[0] ?? null;
+  const resolvedMedia = await resolveVisualProjectMedia(projectId, project);
 
-  if (!primaryVideo && !primaryImage) {
-    throw createRenderError("Project needs at least one image or video file before rendering.", 400, [
-      "Missing image files",
-      "Missing video files",
-    ]);
+  if (!resolvedMedia.audioFile || !resolvedMedia.imageFile) {
+    throw createRenderError("Project assets are not ready for rendering.", 400, [
+      !resolvedMedia.audioFile ? "Missing audio file" : null,
+      !resolvedMedia.imageFile ? "Missing image files" : null,
+    ].filter((detail): detail is string => detail !== null));
   }
 
-  const projectRoot = getVisualProjectRoot(projectId);
   const folders = getVisualProjectAssetFolders(projectId);
   await mkdir(folders.renders, { recursive: true });
   await mkdir(folders.packages, { recursive: true });
 
-  const audioPath = resolveVisualProjectPath(projectId, project.audioFile!);
-  const sourcePath = primaryVideo
-    ? resolveVisualProjectPath(projectId, primaryVideo)
-    : resolveVisualProjectPath(projectId, primaryImage!);
-  const sourceType = primaryVideo ? "video" : "image";
+  const audioPath = resolveVisualProjectPath(projectId, resolvedMedia.audioFile);
+  const sourcePath = resolveVisualProjectPath(projectId, resolvedMedia.imageFile);
   const duration = await getAudioDuration(audioPath);
   const intermediateVisualPath = path.join(folders.renders, `${projectId}.visual.mp4`);
-  const finalOutputPath = path.join(folders.renders, `${projectId}.final.mp4`);
+  const finalOutputPath = path.join(folders.renders, "final.mp4");
 
   await renderLoopedVisual({
     audioDuration: duration,
     outputPath: intermediateVisualPath,
     sourcePath,
-    sourceType,
+    sourceType: "image",
   });
 
   await mergeAudioVideo({
@@ -226,13 +239,22 @@ export async function renderProject(projectId: string): Promise<VisualEngineRend
     outputPath: finalOutputPath,
     videoPath: intermediateVisualPath,
   });
+  await rm(intermediateVisualPath, { force: true });
 
-  const packageResult = await packageProject(projectId, finalOutputPath);
+  const packageResult = await packageProject(projectId, finalOutputPath, {
+    duration: `${duration.toFixed(2)}s`,
+    usedAudio: resolvedMedia.audioFile,
+    usedImage: resolvedMedia.imageFile,
+  });
 
   return {
+    duration: `${duration.toFixed(2)}s`,
     outputPath: relativeProjectPath(finalOutputPath),
-    packagePath: packageResult.bundlePath,
+    packagePath: packageResult.packagePath,
     projectId,
     renderPath: relativeProjectPath(finalOutputPath),
+    success: true,
+    usedAudio: resolvedMedia.audioFile,
+    usedImage: resolvedMedia.imageFile,
   };
 }

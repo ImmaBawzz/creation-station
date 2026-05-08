@@ -18,6 +18,7 @@
 - Minimal package creation with `final.mp4` and `metadata.json`.
 - Path handling rewritten to use `VISUAL_WORKSPACE_PATH` instead of repo-root hardcoded folders.
 - `FFMPEG_PATH` and `FFPROBE_PATH` environment variable support.
+- First successful end-to-end render test now uses real local demo assets, auto-detects supported audio and image files, writes `renders/final.mp4`, and packages `packages/demo-signal-fire.zip`.
 
 ## What Was Explicitly Excluded
 

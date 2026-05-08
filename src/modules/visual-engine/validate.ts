@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 
-import { readVisualProjectManifest } from "@/modules/visual-engine/manifest";
+import { readVisualProjectManifest, resolveVisualProjectMedia } from "@/modules/visual-engine/manifest";
 import { resolveVisualProjectPath } from "@/modules/visual-engine/paths";
 import type {
   VisualEngineProjectManifest,
@@ -29,11 +29,7 @@ export function validateVisualProjectManifest(
     errors.push("Missing audio file");
   }
 
-  if (!project.lyricsFile) {
-    errors.push("Missing lyrics file");
-  }
-
-  if (project.imageFiles.length === 0) {
+  if (project.imageFiles.length === 0 && project.videoFiles.length === 0) {
     errors.push("Missing image files");
   }
 
@@ -54,30 +50,43 @@ export async function validateVisualProjectById(
     return null;
   }
 
-  const result = validateVisualProjectManifest(project);
+  const resolvedMedia = await resolveVisualProjectMedia(projectId, project);
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
-  if (project.audioFile && !await fileExists(projectId, project.audioFile)) {
-    result.errors.push("Audio file path does not exist");
+  if (!resolvedMedia.audioFile) {
+    errors.push("Missing audio file");
+  }
+
+  if (!resolvedMedia.imageFile) {
+    errors.push("Missing image files");
+  }
+
+  if (project.audioFile && resolvedMedia.audioFile !== project.audioFile) {
+    warnings.push(`Manifest audio file was skipped because it does not exist: ${project.audioFile}`);
   }
 
   if (project.lyricsFile && !await fileExists(projectId, project.lyricsFile)) {
-    result.errors.push("Lyrics file path does not exist");
+    warnings.push(`Lyrics file path does not exist: ${project.lyricsFile}`);
   }
 
   for (const imageFile of project.imageFiles) {
-    if (!await fileExists(projectId, imageFile)) {
-      result.errors.push(`Image file path does not exist: ${imageFile}`);
+    if (imageFile !== resolvedMedia.imageFile && !await fileExists(projectId, imageFile)) {
+      warnings.push(`Image file path does not exist: ${imageFile}`);
     }
   }
 
   for (const videoFile of project.videoFiles) {
     if (!await fileExists(projectId, videoFile)) {
-      result.warnings.push(`Video file path does not exist: ${videoFile}`);
+      warnings.push(`Video file path does not exist: ${videoFile}`);
     }
   }
 
-  result.valid = result.errors.length === 0;
-
-  return result;
+  return {
+    errors,
+    projectId,
+    valid: errors.length === 0,
+    warnings,
+  };
 }
 
