@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 
 type WorkflowType = "flux-fast-concept" | "flux-dev-cinematic";
 
-type WorkflowStatusLabel = "Available" | "Needs validation" | "Comfy offline" | "Timeout" | "Output missing" | "Validated";
+type WorkflowValidationStatus = "valid" | "validWithAlias" | "invalid" | "offline";
+type WorkflowRuntimeStatus = "Available" | "Needs validation" | "Comfy offline" | "Timeout" | "Output missing" | "Validated";
+type WorkflowStatusLabel = WorkflowValidationStatus | WorkflowRuntimeStatus;
 
 type WorkflowOption = {
   label: string;
@@ -15,7 +17,13 @@ type WorkflowStatusResponse = {
   available?: boolean;
   errors?: string[];
   label?: string;
+  models?: {
+    missing?: string[];
+    resolved?: Array<{ requiredName: string; resolvedName: string }>;
+    warnings?: string[];
+  };
   selectable?: boolean;
+  stateStatus?: WorkflowRuntimeStatus;
   status?: WorkflowStatusLabel;
   valid?: boolean;
   warnings?: string[];
@@ -32,8 +40,10 @@ const DEFAULT_WORKFLOW_STATUS: Record<WorkflowType, WorkflowStatusResponse> = {
     available: false,
     errors: [],
     label: "Cinematic Frame",
+    models: { missing: [], resolved: [], warnings: [] },
     selectable: false,
-    status: "Needs validation",
+    stateStatus: "Needs validation",
+    status: "invalid",
     valid: false,
     warnings: [],
     workflowType: "flux-dev-cinematic",
@@ -42,8 +52,10 @@ const DEFAULT_WORKFLOW_STATUS: Record<WorkflowType, WorkflowStatusResponse> = {
     available: true,
     errors: [],
     label: "Fast Concept",
+    models: { missing: [], resolved: [], warnings: [] },
     selectable: true,
-    status: "Validated",
+    stateStatus: "Validated",
+    status: "valid",
     valid: true,
     warnings: [],
     workflowType: "flux-fast-concept",
@@ -118,7 +130,13 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
   const isConceptJobActive = conceptStatus !== null && conceptStatus !== "completed" && conceptStatus !== "failed" && conceptStatus !== "timeout";
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
-  const selectedWorkflowNote = selectedWorkflow.errors?.[0] ?? selectedWorkflow.warnings?.[0] ?? "";
+  const selectedWorkflowNote = selectedWorkflow.errors?.[0]
+    ?? (selectedWorkflow.models?.missing && selectedWorkflow.models.missing.length > 0
+      ? `Missing model files: ${selectedWorkflow.models.missing.join(", ")}`
+      : undefined)
+    ?? selectedWorkflow.models?.warnings?.[0]
+    ?? selectedWorkflow.warnings?.[0]
+    ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -172,7 +190,14 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   useEffect(() => {
     const cinematicState = workflowStatusByType["flux-dev-cinematic"];
 
-    if (!cinematicState || cinematicState.status !== "Available" || cinematicState.selectable) {
+    if (
+      !cinematicState
+      || (cinematicState.status !== "valid" && cinematicState.status !== "validWithAlias")
+      || !cinematicState.selectable
+      || cinematicState.stateStatus === "Validated"
+      || cinematicState.stateStatus === "Timeout"
+      || cinematicState.stateStatus === "Output missing"
+    ) {
       return;
     }
 
@@ -223,11 +248,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   }, [projectId, workflowStatusByType]);
 
   function getWorkflowBadgeClass(status: WorkflowStatusLabel | undefined): string {
-    if (status === "Validated" || status === "Available") {
+    if (status === "Validated" || status === "Available" || status === "valid") {
       return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
     }
 
-    if (status === "Needs validation") {
+    if (status === "validWithAlias" || status === "Needs validation" || status === "invalid") {
       return "border-amber-500/40 bg-amber-500/10 text-amber-200";
     }
 
@@ -518,12 +543,13 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
               className={`rounded-full border px-2 py-1 ${getWorkflowBadgeClass(status.status)}`}
               key={option.value}
             >
-              {status.label ?? option.label}: {status.status ?? "Needs validation"}
+              {status.label ?? option.label}: {status.status ?? "invalid"}
             </span>
           );
         })}
         {isRefreshingWorkflowState ? <span className="text-zinc-500">Checking workflows...</span> : null}
       </div>
+      {selectedWorkflow.status === "validWithAlias" ? <p className="text-sm text-amber-300">Using local model alias</p> : null}
       {selectedWorkflowNote ? <p className="text-sm text-zinc-400">{selectedWorkflowNote}</p> : null}
       {conceptMessage ? <p className="text-sm text-zinc-400">{conceptMessage}</p> : null}
       {lyricsMessage ? <p className="text-sm text-zinc-400">{lyricsMessage}</p> : null}

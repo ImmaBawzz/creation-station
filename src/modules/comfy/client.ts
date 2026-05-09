@@ -38,12 +38,23 @@ export function resolveComfyTimeoutMs(): number {
   return 600_000;
 }
 
+export function resolveComfyPollIntervalMs(): number {
+  const rawValue = process.env.CREATION_STATION_COMFY_POLL_INTERVAL_MS;
+  const parsedValue = rawValue ? Number(rawValue) : NaN;
+
+  if (Number.isFinite(parsedValue) && parsedValue > 0) {
+    return parsedValue;
+  }
+
+  return 1_000;
+}
+
 export class ComfyClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
 
   constructor({
-    baseUrl = process.env.CREATION_STATION_COMFYUI_URL ?? "http://127.0.0.1:8188",
+    baseUrl = process.env.COMFY_API_URL ?? process.env.CREATION_STATION_COMFYUI_URL ?? "http://127.0.0.1:8188",
     fetchImpl = fetch,
   }: {
     baseUrl?: string;
@@ -123,7 +134,7 @@ export class ComfyClient {
 
   async waitForCompletion({
     promptId,
-    intervalMs = 1_000,
+    intervalMs = resolveComfyPollIntervalMs(),
     timeoutMs = resolveComfyTimeoutMs(),
   }: {
     promptId: string;

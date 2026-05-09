@@ -34,15 +34,38 @@ The workflow registry and validator check each registered workflow for:
 - `SaveImage` node presence and mutability
 - latent width and height node presence and mutability
 - declared UNET, CLIP, and VAE model filenames in the workflow graph
-- exact local model-file presence for production-role workflows when the Comfy models directory can be resolved
+- exact local model-file presence for production-role workflows using the configurable Comfy model inventory
+- approved local alias resolution when a production-compatible filename differs from the workflow default
 
-Exact model-file validation uses one of these sources:
+The inventory scans these directories:
 
-- `CREATION_STATION_COMFYUI_MODELS_DIR`
-- `CREATION_STATION_COMFYUI_ROOT` joined with `models/`
-- common local ComfyUI install locations when no env var is set
+- `COMFY_MODEL_ROOT/unet`
+- `COMFY_MODEL_ROOT/diffusion_models`
+- `COMFY_MODEL_ROOT/clip`
+- `COMFY_MODEL_ROOT/vae`
+
+Overrides:
+
+- `COMFY_MODEL_ROOT`
+- `COMFY_UNET_DIR`
+- `COMFY_CLIP_DIR`
+- `COMFY_VAE_DIR`
 
 If a referenced model file is missing, the workflow is not selectable and the UI surfaces the exact missing filename.
+If an approved alias exists locally, validation returns `validWithAlias`, the UI warns that a local alias is being used, and the submitted workflow graph is mutated to the resolved local filename before queue submission.
+
+### Alias Resolution
+
+Current supported alias families include:
+
+- `flux1-dev.safetensors` -> `flux1-dev-fp8.safetensors` or `flux-dev-fp8.safetensors`
+- `clip_l.safetensors` -> `clip-l.safetensors`
+- `t5xxl_fp16.safetensors` -> `t5xxl_fp8_e4m3fn.safetensors` or `t5xxl_fp8.safetensors`
+- `ae.safetensors` -> `flux_ae.safetensors`
+
+If only `flux1-schnell.safetensors` is available, Creation Station does not promote it into the production cinematic workflow and instead recommends keeping Schnell under `Fast Concept`.
+
+If only GGUF production candidates are found, Creation Station does not auto-select them for the current `UNETLoader` path and reports that GGUF loader support would be required.
 
 ## UI Selection Rules
 
@@ -85,6 +108,7 @@ After submission, Creation Station preserves the existing async behavior:
 
 - `Cinematic Frame` stays disabled.
 - The validator returns a short error, including exact missing model filenames when detected.
+- Alias-backed validation keeps the workflow enabled but surfaces `Using local model alias` in the UI.
 - Builds continue to succeed because validation errors are runtime workflow state, not compile errors.
 
 ### Timeout
@@ -105,6 +129,22 @@ After submission, Creation Station preserves the existing async behavior:
 - The imported image is written into the project image folder.
 - The project manifest is updated.
 - The image becomes visible in the project UI.
+
+## Submitted Workflow Debug
+
+Each submitted workflow write includes an ignored debug file at:
+
+- `.debug/comfy-last-submitted-[workflowType].json`
+
+That payload includes:
+
+- workflow type
+- required model names
+- resolved model names
+- mutated node IDs
+- final prompt
+- final negative prompt
+- final filename prefix
 
 ## Why Video Workflows Stay Blocked
 

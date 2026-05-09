@@ -37,7 +37,18 @@ export async function POST(_request: Request, context: RouteContext) {
       workflowType: typedWorkflowType,
     });
 
-    return NextResponse.json({ ...validation, ...state }, { status: 422 });
+    return NextResponse.json({
+      available: false,
+      errors: validation.errors,
+      label: getComfyWorkflowEntry(typedWorkflowType).label,
+      models: validation.models,
+      selectable: false,
+      stateStatus: state.status,
+      status: "invalid",
+      valid: false,
+      warnings: validation.warnings,
+      workflowType: typedWorkflowType,
+    }, { status: 422 });
   }
 
   const client = new ComfyClient();
@@ -57,7 +68,7 @@ export async function POST(_request: Request, context: RouteContext) {
       errors: validation.errors,
       modelFiles: validation.modelFiles,
       nodeMapping: validation.nodeMapping,
-      selectable: entry.modelRole === "concept" || nextStatus === "Validated",
+      selectable: true,
       status: nextStatus,
       valid: true,
       warnings: validation.warnings,
@@ -65,9 +76,16 @@ export async function POST(_request: Request, context: RouteContext) {
     });
 
     return NextResponse.json({
-      ...validation,
-      ...state,
-      label: getComfyWorkflowEntry(typedWorkflowType).label,
+      available: true,
+      errors: validation.errors,
+      label: entry.label,
+      models: validation.models,
+      selectable: true,
+      stateStatus: state.status,
+      status: validation.modelValidationStatus,
+      valid: true,
+      warnings: validation.warnings,
+      workflowType: typedWorkflowType,
     });
   } catch (error) {
     const routeError = error as ComfyError;
@@ -86,9 +104,16 @@ export async function POST(_request: Request, context: RouteContext) {
 
     return NextResponse.json(
       {
-        ...validation,
-        ...state,
+        available: false,
+        errors: validation.errors,
         label: getComfyWorkflowEntry(typedWorkflowType).label,
+        models: validation.models,
+        selectable: false,
+        stateStatus: state.status,
+        status: "offline",
+        valid: true,
+        warnings,
+        workflowType: typedWorkflowType,
       },
       { status: routeError.statusCode ?? 503 },
     );
