@@ -1,5 +1,7 @@
 type FetchLike = typeof fetch;
 
+export type ComfyPromptRuntimeStatus = "queued" | "running" | "completed" | "failed";
+
 export type ComfyOutputRef = {
   filename: string;
   subfolder: string;
@@ -25,8 +27,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
 
-function resolveComfyTimeoutMs(): number {
-  const rawValue = process.env.CREATION_STATION_COMFYUI_TIMEOUT_MS;
+export function resolveComfyTimeoutMs(): number {
+  const rawValue = process.env.CREATION_STATION_COMFY_TIMEOUT_MS ?? process.env.CREATION_STATION_COMFYUI_TIMEOUT_MS;
   const parsedValue = rawValue ? Number(rawValue) : NaN;
 
   if (Number.isFinite(parsedValue) && parsedValue > 0) {
@@ -155,6 +157,34 @@ export class ComfyClient {
     });
   }
 
+  async getPromptRuntimeStatus(promptId: string): Promise<ComfyPromptRuntimeStatus> {
+    const history = await this.fetchHistory(promptId);
+    const record = asRecord(history[promptId]);
+    const status = asRecord(record?.status);
+
+    if (status?.status_str === "error") {
+      return "failed";
+    }
+
+    if (status?.completed === true || asRecord(record?.outputs)) {
+      return "completed";
+    }
+
+    const queue = await this.fetchQueue();
+    const running = Array.isArray(queue.queue_running) ? queue.queue_running : [];
+    const pending = Array.isArray(queue.queue_pending) ? queue.queue_pending : [];
+
+    if (containsPromptId(running, promptId)) {
+      return "running";
+    }
+
+    if (containsPromptId(pending, promptId)) {
+      return "queued";
+    }
+
+    return "running";
+  }
+
   async retrieveOutputs(promptId: string): Promise<ComfyOutputRef[]> {
     const history = await this.fetchHistory(promptId);
     const record = asRecord(history[promptId]);
@@ -278,4 +308,48 @@ export class ComfyClient {
 
     return (await response.json()) as Record<string, unknown>;
   }
+
+  private async fetchQueue(): Promise<Record<string, unknown>> {
+    let response: Response;
+
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/queue`);
+    } catch (error) {
+      throw new ComfyError(
+        `ComfyUI queue lookup failed because ComfyUI is unavailable at ${this.baseUrl}: ${
+          error instanceof Error ? error.message : "connection failed"
+        }`,
+        { code: "COMFY_OFFLINE", statusCode: 503 },
+      );
+    }
+
+    if (!response.ok) {
+      throw new ComfyError(`ComfyUI queue lookup failed with HTTP ${response.status}.`, {
+        code: "COMFY_QUEUE_FAILED",
+        statusCode: 502,
+      });
+    }
+
+    return (await response.json()) as Record<string, unknown>;
+  }
+}
+
+function containsPromptId(entries: unknown[], promptId: string): boolean {
+  return entries.some((entry) => entryContainsPromptId(entry, promptId));
+}
+
+function entryContainsPromptId(value: unknown, promptId: string): boolean {
+  if (typeof value === "string") {
+    return value === promptId;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => entryContainsPromptId(entry, promptId));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value).some((entry) => entryContainsPromptId(entry, promptId));
+  }
+
+  return false;
 }

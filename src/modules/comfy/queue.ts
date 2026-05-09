@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { ComfyClient, ComfyError, type ComfyOutputRef } from "@/modules/comfy/client";
+import { ComfyClient, ComfyError } from "@/modules/comfy/client";
 
 type ComfyGraphNode = {
   id: number;
@@ -57,7 +57,6 @@ const WIDGET_NAME_MAP: Record<string, string[]> = {
 export type SupportedComfyWorkflowType = keyof typeof WORKFLOW_REGISTRY;
 
 export type QueuedComfyImageJob = {
-  output: ComfyOutputRef;
   promptId: string;
   workflowPath: string;
   workflowType: SupportedComfyWorkflowType;
@@ -215,20 +214,8 @@ export async function queueComfyImageJob({
 
   const promptPayload = convertGraphToPrompt(editableGraph);
   const { promptId } = await client.submitPrompt({ prompt: promptPayload });
-  await client.waitForCompletion({ promptId });
-
-  const outputs = await client.retrieveOutputs(promptId);
-  const [firstOutput] = outputs;
-
-  if (!firstOutput) {
-    throw new ComfyError(`ComfyUI job has no retrievable outputs: ${promptId}`, {
-      code: "COMFY_MISSING_OUTPUT",
-      statusCode: 502,
-    });
-  }
 
   return {
-    output: firstOutput,
     promptId,
     workflowPath: entry.workflowPath,
     workflowType,

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { ComfyClient, ComfyError } from "@/modules/comfy/client";
-import { importComfyOutputToProject } from "@/modules/comfy/importOutput";
+import { ComfyClient, resolveComfyTimeoutMs } from "@/modules/comfy/client";
+import { createComfyJob } from "@/modules/comfy/jobs";
 import { queueComfyImageJob, type SupportedComfyWorkflowType } from "@/modules/comfy/queue";
 import { isSupportedComfyWorkflowType, validateComfyGenerationRequest } from "@/modules/comfy/validate";
-import { relativeProjectPath } from "@/modules/visual-engine/manifest";
 
 type ComfyGenerateRouteError = Error & {
   details?: string[];
@@ -57,19 +56,18 @@ export async function POST(request: Request) {
       workflowType: workflowType as SupportedComfyWorkflowType,
     });
 
-    const imported = await importComfyOutputToProject({
-      client,
-      output: job.output,
+    const trackedJob = await createComfyJob({
       projectId,
+      promptId: job.promptId,
+      timeoutMs: resolveComfyTimeoutMs(),
+      workflowType: job.workflowType,
     });
 
     return NextResponse.json({
-      imagePath: imported.imagePath,
-      manifestPath: relativeProjectPath(imported.manifestPath),
-      projectId,
+      jobId: trackedJob.jobId,
       promptId: job.promptId,
+      status: trackedJob.status,
       success: true,
-      workflowType,
     });
   } catch (error) {
     const comfyError = error as ComfyGenerateRouteError;

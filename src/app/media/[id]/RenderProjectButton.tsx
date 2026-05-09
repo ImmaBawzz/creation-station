@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type RenderResponse = {
   duration?: string;
@@ -20,9 +20,22 @@ type RenderResponse = {
 type ComfyGenerateResponse = {
   details?: string[];
   error?: string;
+  jobId?: string;
+  promptId?: string;
+  status?: ComfyJobStatus;
+  success?: boolean;
+};
+
+type ComfyJobStatus = "queued" | "running" | "importing" | "completed" | "failed" | "timeout";
+
+type ComfyJobResponse = {
+  details?: string[];
+  error?: string;
   imagePath?: string;
+  jobId?: string;
   manifestPath?: string;
   promptId?: string;
+  status?: ComfyJobStatus;
   success?: boolean;
   workflowType?: string;
 };
@@ -39,8 +52,10 @@ type LyricsResponse = {
 };
 
 export function RenderProjectButton({ projectId }: { projectId: string }) {
+  const [activeConceptJobId, setActiveConceptJobId] = useState<string | null>(null);
   const [conceptMessage, setConceptMessage] = useState<string>("");
   const [conceptPrompt, setConceptPrompt] = useState(`cinematic concept art for ${projectId.replace(/[-_]+/g, " ")}`);
+  const [conceptStatus, setConceptStatus] = useState<ComfyJobStatus | null>(null);
   const [negativeConceptPrompt, setNegativeConceptPrompt] = useState(
     "blurry, low quality, distorted anatomy, watermark, text, logo",
   );
@@ -49,6 +64,97 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState<string>("");
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
+
+  const isConceptJobActive = conceptStatus !== null && conceptStatus !== "completed" && conceptStatus !== "failed" && conceptStatus !== "timeout";
+
+  useEffect(() => {
+    if (!activeConceptJobId) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextPoll = (delayMs: number) => {
+      if (cancelled) {
+        return;
+      }
+
+      timer = setTimeout(() => {
+        void pollJob();
+      }, delayMs);
+    };
+
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/api/comfy/jobs/${activeConceptJobId}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as ComfyJobResponse;
+        const nextStatus = payload.status ?? null;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (nextStatus) {
+          setConceptStatus(nextStatus);
+        }
+
+        if (nextStatus === "queued") {
+          setConceptMessage("Queued");
+          scheduleNextPoll(1_500);
+          return;
+        }
+
+        if (nextStatus === "running") {
+          setConceptMessage("Generating");
+          scheduleNextPoll(1_500);
+          return;
+        }
+
+        if (nextStatus === "importing") {
+          setConceptMessage("Importing");
+          scheduleNextPoll(1_000);
+          return;
+        }
+
+        if (nextStatus === "completed") {
+          setConceptMessage(`Complete: ${payload.imagePath ?? "image imported"}`);
+          setActiveConceptJobId(null);
+          return;
+        }
+
+        if (nextStatus === "failed" || nextStatus === "timeout") {
+          setConceptMessage(payload.error ?? "Concept generation failed.");
+          setActiveConceptJobId(null);
+          return;
+        }
+
+        if (!response.ok) {
+          setConceptMessage(payload.error ?? "Comfy job status check failed.");
+          scheduleNextPoll(2_500);
+          return;
+        }
+
+        scheduleNextPoll(1_500);
+      } catch (error) {
+        if (!cancelled) {
+          setConceptMessage(error instanceof Error ? error.message : "Comfy job status check failed.");
+          scheduleNextPoll(2_500);
+        }
+      }
+    };
+
+    void pollJob();
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [activeConceptJobId]);
 
   async function handleGenerateConcept() {
     const prompt = conceptPrompt.trim();
@@ -60,7 +166,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     const negativePrompt = negativeConceptPrompt.trim();
 
     setIsGeneratingConcept(true);
-    setConceptMessage("");
+    setConceptMessage("Submitting...");
 
     try {
       const response = await fetch("/api/comfy/generate-image", {
@@ -76,6 +182,13 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       const payload = (await response.json()) as ComfyGenerateResponse;
 
       if (!response.ok) {
+        if (response.status === 409 && payload.details?.[0]) {
+          setActiveConceptJobId(payload.details[0]);
+          setConceptStatus((payload.details[1] as ComfyJobStatus | undefined) ?? "queued");
+          setConceptMessage(payload.details[1] === "running" ? "Generating" : "Queued");
+          return;
+        }
+
         const detailText = payload.details && payload.details.length > 0
           ? ` ${payload.details.join("; ")}`
           : "";
@@ -83,7 +196,9 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
         return;
       }
 
-      setConceptMessage(`Concept art ready: ${payload.imagePath ?? "image created"}`);
+      setActiveConceptJobId(payload.jobId ?? null);
+      setConceptStatus(payload.status ?? "queued");
+      setConceptMessage("Queued");
     } catch (error) {
       setConceptMessage(error instanceof Error ? error.message : "Concept generation failed.");
     } finally {
@@ -172,11 +287,19 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isGeneratingConcept}
+          disabled={isGeneratingConcept || isConceptJobActive}
           onClick={handleGenerateConcept}
           type="button"
         >
-          {isGeneratingConcept ? "Generating Concept..." : "Generate Concept Art"}
+          {isGeneratingConcept
+            ? "Submitting Concept..."
+            : isConceptJobActive
+            ? conceptStatus === "queued"
+              ? "Concept Queued"
+              : conceptStatus === "importing"
+              ? "Importing Concept..."
+              : "Generating Concept..."
+            : "Generate Concept Art"}
         </button>
         <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
