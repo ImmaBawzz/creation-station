@@ -59,17 +59,21 @@ This repository keeps source code, curated fixtures, and lightweight demo struct
 
 ## Current Tracked Fixture Decision
 
-The repository already tracks a small demo fixture set under `visual-workspace/projects/demo-signal-fire/`, including:
+The repository keeps only the lightweight demo fixture surface under `visual-workspace/projects/demo-signal-fire/` in git:
 
-- `audio/signal_fire_ui_smoke.mp3`
-- `images/signal_fire_ui_smoke_start_image.png`
-- `lyrics/signal_fire_ui_smoke_lyrics.txt`
 - `project.json`
+- `.gitkeep` files for required folders
+- `lyrics/signal_fire_ui_smoke_lyrics.txt`
 
-This change does not remove those tracked files. They are treated as existing demo fixtures until a separate cleanup explicitly either:
+Audio files, images, renders, packages, and generated lyrics byproducts for demo or stress-test runs stay local and are not part of the committed fixture set.
 
-- keeps them as curated demo assets, or
-- relocates them into a dedicated fixture area such as `tests/fixtures/` or another documented demo surface.
+If a future test needs committed media-like inputs, promote them deliberately into a dedicated curated fixture location with explicit rationale rather than letting `visual-workspace/` accumulate generated artifacts.
+
+## Stress-Test Projects
+
+Projects such as `clean-vocals-test`, `melodic-vocals-test`, and `hard-vocals-test` are treated as local stress-test workspaces unless they are explicitly promoted into a curated fixture directory.
+
+- Promotion path: move lightweight manifests and tiny text inputs into `tests/fixtures/visual-engine/`, exclude large media and generated outputs, and document why the fixture is stable and worth versioning.
 
 ## Ambiguous Files
 

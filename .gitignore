@@ -60,6 +60,10 @@ next-env.d.ts
 /visual-workspace/projects/*/audio/*.wav
 /visual-workspace/projects/*/video/*.mp4
 /visual-workspace/projects/*/video/*.mov
+/visual-workspace/projects/*/project.json
+!/visual-workspace/projects/demo-signal-fire/project.json
+/visual-workspace/projects/*/lyrics/*.txt
+!/visual-workspace/projects/demo-signal-fire/lyrics/signal_fire_ui_smoke_lyrics.txt
 /visual-workspace/projects/*/lyrics/lyrics.json
 /visual-workspace/projects/*/lyrics/lyrics-aligned.json
 /visual-workspace/projects/*/lyrics/lyrics.srt
