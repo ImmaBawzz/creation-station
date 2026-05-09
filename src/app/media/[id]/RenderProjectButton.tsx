@@ -237,6 +237,47 @@ type SceneVideoResponse = {
   success?: boolean;
 };
 
+type MotionTemplateKey = "emotional" | "performance" | "battle" | "reveal" | "atmospheric" | "high-energy" | "dreamlike";
+type MotionIntensityLabel = "low" | "medium" | "high" | "extreme";
+type LoopSuitability = "high" | "medium" | "low";
+
+type SceneMotionPlanItem = {
+  cameraMovement: string;
+  duration: number;
+  endFrameStrategy: string;
+  environmentalMovement: string;
+  loopSuitability: LoopSuitability;
+  motionIntensity: MotionIntensityLabel;
+  pacingScore: number;
+  providerCompatibilityTags: string[];
+  sceneId: string;
+  sourceImage: string;
+  startFrameStrategy: string;
+  subjectMovement: string;
+  templateKey: MotionTemplateKey;
+  transitionType: string;
+};
+
+type SceneMotionPlan = {
+  createdAt: string;
+  projectId: string;
+  scenes: SceneMotionPlanItem[];
+  sourceManifests: {
+    sceneAssets: string;
+    sceneMotionPlan: string;
+    scenePlan: string;
+  };
+  updatedAt: string;
+};
+
+type SceneMotionPlanResponse = {
+  details?: string[];
+  error?: string;
+  motionPlan?: SceneMotionPlan;
+  projectId?: string;
+  success?: boolean;
+};
+
 function formatSceneTime(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
@@ -265,7 +306,10 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [isGeneratingConcept, setIsGeneratingConcept] = useState(false);
   const [lyricsMessage, setLyricsMessage] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  const [isGeneratingMotionPlan, setIsGeneratingMotionPlan] = useState(false);
   const [isSubmittingSceneVideos, setIsSubmittingSceneVideos] = useState(false);
+  const [motionPlan, setMotionPlan] = useState<SceneMotionPlan | null>(null);
+  const [motionPlanMessage, setMotionPlanMessage] = useState<string>("");
   const [sceneExecutionAction, setSceneExecutionAction] = useState<string | null>(null);
   const [sceneExecutionMessage, setSceneExecutionMessage] = useState<string>("");
   const [sceneExecutionState, setSceneExecutionState] = useState<SceneExecutionState | null>(null);
@@ -286,6 +330,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const isSceneVideoActive = sceneVideoState?.status === "running";
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
   const approvedScenes = scenePlan.filter((scene) => approvedSceneIds.includes(scene.id));
+  const motionPlanBySceneId = new Map(motionPlan?.scenes.map((scene) => [scene.sceneId, scene]) ?? []);
   const sceneExecutionAssetsBySceneId = new Map(sceneExecutionState?.assets.map((asset) => [asset.sceneId, asset]) ?? []);
   const sceneVideoJobsBySceneId = new Map(sceneVideoState?.jobs.map((job) => [job.sceneId, job]) ?? []);
   const selectedWorkflowNote = selectedWorkflow.errors?.[0]
@@ -298,6 +343,33 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    async function loadMotionPlan() {
+      try {
+        const response = await fetch(`/api/motion-director/generate?projectId=${encodeURIComponent(projectId)}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setMotionPlan(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as SceneMotionPlanResponse;
+
+        if (cancelled || !payload.motionPlan) {
+          return;
+        }
+
+        setMotionPlan(payload.motionPlan);
+      } catch {
+        if (!cancelled) {
+          setMotionPlan(null);
+        }
+      }
+    }
 
     async function loadScenePlan() {
       try {
@@ -323,6 +395,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
 
     void loadScenePlan();
+    void loadMotionPlan();
 
     return () => {
       cancelled = true;
@@ -856,6 +929,35 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
   }
 
+  async function handleGenerateMotionPlan() {
+    setIsGeneratingMotionPlan(true);
+    setMotionPlanMessage("Generating cinematic motion plan...");
+
+    try {
+      const response = await fetch("/api/motion-director/generate", {
+        body: JSON.stringify({ projectId }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as SceneMotionPlanResponse;
+
+      if (!response.ok || !payload.motionPlan) {
+        const detailText = payload.details && payload.details.length > 0
+          ? ` ${payload.details.join("; ")}`
+          : "";
+        setMotionPlanMessage(`${payload.error ?? "Motion plan generation failed."}${detailText}`);
+        return;
+      }
+
+      setMotionPlan(payload.motionPlan);
+      setMotionPlanMessage(`Motion plan ready: ${payload.motionPlan.scenes.length} cinematic instructions generated.`);
+    } catch (error) {
+      setMotionPlanMessage(error instanceof Error ? error.message : "Motion plan generation failed.");
+    } finally {
+      setIsGeneratingMotionPlan(false);
+    }
+  }
+
   async function handleRender() {
     setIsRendering(true);
     setMessage("");
@@ -1009,6 +1111,14 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
             : "Generate Scene Videos"}
         </button>
         <button
+          className="rounded-lg border border-violet-700/70 bg-violet-950/40 px-3 py-2 text-sm text-violet-100 hover:bg-violet-900/50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isGeneratingMotionPlan || approvedScenes.length === 0}
+          onClick={() => void handleGenerateMotionPlan()}
+          type="button"
+        >
+          {isGeneratingMotionPlan ? "Generating Motion Plan..." : "Generate Motion Plan"}
+        </button>
+        <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "running"}
           onClick={() => void handleSceneExecutionAction("pause")}
@@ -1064,6 +1174,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       {sceneExecutionMessage ? <p className="text-sm text-zinc-400">{sceneExecutionMessage}</p> : null}
       <p className="text-sm text-amber-300">Mock video planning only. Real video providers not enabled.</p>
       {sceneVideoMessage ? <p className="text-sm text-zinc-400">{sceneVideoMessage}</p> : null}
+      {motionPlanMessage ? <p className="text-sm text-zinc-400">{motionPlanMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}
       {scenePlan.length > 0 ? (
         <div className="mt-2 w-full space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
@@ -1076,8 +1187,16 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
               <p>{approvedScenes.length} of {scenePlan.length} approved</p>
               {sceneExecutionState ? <p>{sceneExecutionState.progress.processed}/{sceneExecutionState.progress.total} scenes complete</p> : null}
               {sceneVideoState ? <p>{sceneVideoState.progress.processed}/{sceneVideoState.progress.total} scene videos processed</p> : null}
+              {motionPlan ? <p>{motionPlan.scenes.length} motion instructions generated</p> : null}
             </div>
           </div>
+          {motionPlan ? (
+            <div className="rounded-xl border border-violet-900/60 bg-violet-950/20 p-3 text-xs text-violet-100">
+              <p className="font-medium">Motion plan manifest: {motionPlan.sourceManifests.sceneMotionPlan}</p>
+              <p>Templates active: {[...new Set(motionPlan.scenes.map((scene) => scene.templateKey))].join(", ")}</p>
+              <p>Provider tags: {[...new Set(motionPlan.scenes.flatMap((scene) => scene.providerCompatibilityTags))].join(", ")}</p>
+            </div>
+          ) : null}
           {sceneVideoState ? (
             <div className="rounded-xl border border-sky-900/60 bg-sky-950/20 p-3 text-xs text-sky-100">
               <p className="font-medium">Scene video manifest: {sceneVideoState.sourceManifests.sceneVideos}</p>
@@ -1112,6 +1231,19 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                     <p className="text-sm text-zinc-300">{scene.visualDescription}</p>
                     <p className="text-sm text-zinc-400">{scene.cameraDirection}</p>
                     {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath ? <p className="text-sm text-emerald-300">Asset: {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath}</p> : null}
+                    {motionPlanBySceneId.get(scene.id) ? (
+                      <div className="space-y-1 rounded-lg border border-violet-900/60 bg-violet-950/20 p-3 text-sm text-violet-100">
+                        <p>Motion template: {motionPlanBySceneId.get(scene.id)?.templateKey}</p>
+                        <p>Camera: {motionPlanBySceneId.get(scene.id)?.cameraMovement}</p>
+                        <p>Subject: {motionPlanBySceneId.get(scene.id)?.subjectMovement}</p>
+                        <p>Environment: {motionPlanBySceneId.get(scene.id)?.environmentalMovement}</p>
+                        <p>Transition: {motionPlanBySceneId.get(scene.id)?.transitionType}</p>
+                        <p>Intensity: {motionPlanBySceneId.get(scene.id)?.motionIntensity} | Pacing: {motionPlanBySceneId.get(scene.id)?.pacingScore} | Loop: {motionPlanBySceneId.get(scene.id)?.loopSuitability}</p>
+                        <p>Start frame: {motionPlanBySceneId.get(scene.id)?.startFrameStrategy}</p>
+                        <p>End frame: {motionPlanBySceneId.get(scene.id)?.endFrameStrategy}</p>
+                        <p>Compatibility: {motionPlanBySceneId.get(scene.id)?.providerCompatibilityTags.join(", ")}</p>
+                      </div>
+                    ) : null}
                     {sceneVideoJobsBySceneId.get(scene.id) ? (
                       <p className="text-sm text-sky-300">
                         Video plan: {sceneVideoJobsBySceneId.get(scene.id)?.motionType} for {sceneVideoJobsBySceneId.get(scene.id)?.duration.toFixed(2)}s from {sceneVideoJobsBySceneId.get(scene.id)?.sourceImage}
