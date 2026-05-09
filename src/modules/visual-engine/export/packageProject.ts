@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 
 import { readVisualProjectManifest, relativeProjectPath } from "@/modules/visual-engine/manifest";
 import { getVisualProjectAssetFolders } from "@/modules/visual-engine/paths";
+import type { VisualEnginePackageResult } from "@/modules/visual-engine/types";
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +40,7 @@ export async function packageProject(
     usedAudio?: string;
     usedImage?: string;
   },
-) {
+): Promise<VisualEnginePackageResult> {
   const project = await readVisualProjectManifest(projectId);
 
   if (!project) {

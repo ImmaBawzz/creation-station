@@ -19,6 +19,8 @@
 - Path handling rewritten to use `VISUAL_WORKSPACE_PATH` instead of repo-root hardcoded folders.
 - `FFMPEG_PATH` and `FFPROBE_PATH` environment variable support.
 - First successful end-to-end render test now uses real local demo assets, auto-detects supported audio and image files, writes `renders/final.mp4`, and packages `packages/demo-signal-fire.zip`.
+- Post-render FFprobe quality checks now validate the produced `final.mp4` before packaging.
+- Automated lyrics timing now writes `lyrics.json`, `lyrics.srt`, and `lyrics.ass`, with Whisper-backed word timestamps and ASS subtitle overlay when timings are available.
 
 ## What Was Explicitly Excluded
 
@@ -35,7 +37,7 @@
 ## Remaining Work
 
 - Multi-source timeline assembly.
-- Subtitle burn and soft-subtitle export after timing is migrated deliberately.
+- Extend subtitle burn to richer style controls and optional soft-subtitle muxing.
 - Social format exports and teaser cuts.
 - Post-render quality gates using FFprobe.
 - Persisted render history on the project model once Prisma storage is added.

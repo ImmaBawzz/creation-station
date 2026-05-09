@@ -47,6 +47,11 @@ next-env.d.ts
 /.creation-station/
 /input/
 /output/
+/visual-workspace/projects/*/renders/final.mp4
+/visual-workspace/projects/*/packages/*.zip
+/visual-workspace/projects/*/lyrics/lyrics.json
+/visual-workspace/projects/*/lyrics/lyrics.srt
+/visual-workspace/projects/*/lyrics/lyrics.ass
 
 # playwright runtime artifacts
 playwright.e2e.db

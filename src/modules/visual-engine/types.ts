@@ -29,16 +29,57 @@ export type VisualEngineProjectValidationResult = {
   warnings: string[];
 };
 
+export type VisualEngineRenderQualityCheck = {
+  audioCodec: string | null;
+  durationSeconds: number;
+  expectedDurationSeconds: number;
+  hasAudioStream: boolean;
+  hasVideoStream: boolean;
+  height: number | null;
+  videoCodec: string | null;
+  width: number | null;
+};
+
 export type VisualEngineRenderResult = {
+  duration: string;
   outputPath: string;
   packagePath: string;
   projectId: string;
+  qualityCheck?: VisualEngineRenderQualityCheck;
   renderPath: string;
+  success: boolean;
+  usedAudio: string;
+  usedImage: string;
 };
 
 export type VisualEnginePackageResult = {
-  bundlePath: string;
   files: string[];
   metadataPath: string;
+  packagePath: string;
   projectId: string;
+};
+
+export type VisualEngineLyricsWord = {
+  end: number;
+  start: number;
+  text: string;
+};
+
+export type VisualEngineLyricsLine = {
+  end: number;
+  index: number;
+  start: number;
+  text: string;
+  words: VisualEngineLyricsWord[];
+};
+
+export type VisualEngineLyricsArtifacts = {
+  assPath: string;
+  jsonPath: string;
+  lineCount: number;
+  lines: VisualEngineLyricsLine[];
+  projectId: string;
+  srtPath: string;
+  wordCount: number;
+  words: VisualEngineLyricsWord[];
 };
