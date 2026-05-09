@@ -1,5 +1,22 @@
 import type { VisualEngineLyricsLine, VisualEngineLyricsWord } from "@/modules/visual-engine/types";
 
+type LyricsGeneratorInput = VisualEngineLyricsLine[] | {
+  alignedLines?: VisualEngineLyricsLine[];
+  fallbackLines: VisualEngineLyricsLine[];
+};
+
+function resolvePreferredLines(input: LyricsGeneratorInput): VisualEngineLyricsLine[] {
+  if (Array.isArray(input)) {
+    return input;
+  }
+
+  if (input.alignedLines && input.alignedLines.length > 0) {
+    return input.alignedLines;
+  }
+
+  return input.fallbackLines;
+}
+
 function formatAssTimestamp(seconds: number): string {
   const totalCentiseconds = Math.max(0, Math.round(seconds * 100));
   const hours = Math.floor(totalCentiseconds / 360_000);
@@ -27,7 +44,8 @@ function lineToDialogue(line: VisualEngineLyricsLine): string {
     .join(" ")}`;
 }
 
-export function generateAss(lines: VisualEngineLyricsLine[]): string {
+export function generateAss(input: LyricsGeneratorInput): string {
+  const lines = resolvePreferredLines(input);
   const header = [
     "[Script Info]",
     "ScriptType: v4.00+",

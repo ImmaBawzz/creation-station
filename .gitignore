@@ -50,6 +50,7 @@ next-env.d.ts
 /visual-workspace/projects/*/renders/final.mp4
 /visual-workspace/projects/*/packages/*.zip
 /visual-workspace/projects/*/lyrics/lyrics.json
+/visual-workspace/projects/*/lyrics/lyrics-aligned.json
 /visual-workspace/projects/*/lyrics/lyrics.srt
 /visual-workspace/projects/*/lyrics/lyrics.ass
 

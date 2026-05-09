@@ -8,8 +8,21 @@
 - Visual source: `visual-workspace/projects/demo-signal-fire/images/signal_fire_ui_smoke_start_image.png`
 - Subtitle artifacts generated:
   - `visual-workspace/projects/demo-signal-fire/lyrics/lyrics.json`
+  - `visual-workspace/projects/demo-signal-fire/lyrics/lyrics-aligned.json`
   - `visual-workspace/projects/demo-signal-fire/lyrics/lyrics.srt`
   - `visual-workspace/projects/demo-signal-fire/lyrics/lyrics.ass`
+
+## Alignment Validation Report
+
+- Source-truth alignment was run against `lyrics.txt` and the live Whisper word-timestamp output through `/api/visual-engine/projects/demo-signal-fire/lyrics/align`.
+- The alignment layer produced `lyrics-aligned.json` and the generators preferred aligned timestamps for the validation render.
+- Real validation metrics from the aligned artifact:
+  - confidence score: `0.763`
+  - average timing drift: `0.12s`
+  - matched source words: `139`
+  - unaligned transcript words dropped from source truth: `152`
+  - missing source words requiring interpolation: `25`
+- The alignment pass improved subtitle timing precision in early-line holds and repeated chorus sections by keeping the canonical lyric order monotonic and interpolating skipped source words instead of surfacing Whisper hallucinations as visible text.
 
 ## Timestamp Quality
 
@@ -46,4 +59,4 @@
 
 - Raw subtitle timing still needs tighter line-level alignment for sung lyrics before this should be treated as fully production-ready for arbitrary music assets.
 - The karaoke-oriented ASS artifact still inherits limitations from Whisper word timing accuracy on music vocals.
-- A dedicated alignment pass between source lyrics and transcribed timing anchors would improve repeated chorus timing and reduce long holds.
+- The new alignment layer improves repeated chorus placement and skipped-word recovery, but a stronger forced-alignment backend would still help on the lowest-confidence lines.

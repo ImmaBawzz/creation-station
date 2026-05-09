@@ -11,6 +11,12 @@ import {
   resolveVisualProjectPath,
 } from "@/modules/visual-engine/paths";
 import type { VisualEngineLyricsArtifacts, VisualEngineLyricsWord } from "@/modules/visual-engine/types";
+import {
+  alignLyricsToSource,
+  getAlignedLyricsFileLabel,
+  getAlignedLyricsFileName,
+  type LyricsAlignmentReport,
+} from "@/modules/visual-engine/lyrics/align";
 import { generateAss } from "@/modules/visual-engine/lyrics/generateAss";
 import { groupLyricsLines } from "@/modules/visual-engine/lyrics/groupLines";
 import { generateSrt } from "@/modules/visual-engine/lyrics/generateSrt";
@@ -177,7 +183,14 @@ async function readLyricsSourceText(projectId: string, lyricsFile: string | null
   }
 }
 
-export async function generateLyricsArtifacts(projectId: string): Promise<VisualEngineLyricsArtifacts> {
+type GeneratedLyricsBundle = {
+  alignedJsonPath: string | null;
+  alignmentReport: LyricsAlignmentReport | null;
+  artifacts: VisualEngineLyricsArtifacts;
+  usedAlignedTimestamps: boolean;
+};
+
+async function generateLyricsBundle(projectId: string): Promise<GeneratedLyricsBundle> {
   const project = await readVisualProjectManifest(projectId);
 
   if (!project) {
@@ -198,14 +211,47 @@ export async function generateLyricsArtifacts(projectId: string): Promise<Visual
   const audioPath = resolveVisualProjectPath(projectId, resolvedMedia.audioFile);
   const sourceLyricsText = await readLyricsSourceText(projectId, resolvedMedia.lyricsFile);
   const words = await transcribeAudioWithWhisper(audioPath);
-  const lines = groupLyricsLines(words, { sourceLyricsText });
+  const fallbackLines = groupLyricsLines(words, { sourceLyricsText });
+  const alignedJsonPath = path.join(folders.lyrics, getAlignedLyricsFileName());
   const jsonPath = path.join(folders.lyrics, "lyrics.json");
   const srtPath = path.join(folders.lyrics, "lyrics.srt");
   const assPath = path.join(folders.lyrics, "lyrics.ass");
+  let alignmentReport: LyricsAlignmentReport | null = null;
+  let alignedLines = fallbackLines;
+  let relativeAlignedJsonPath: string | null = null;
+  let usedAlignedTimestamps = false;
+
+  if (sourceLyricsText) {
+    const alignment = alignLyricsToSource({
+      audioPath,
+      sourceLyricsText,
+      transcriptWords: words,
+    });
+    const hasAlignedLines = alignment.alignedLines.length > 0;
+    alignmentReport = alignment.report;
+
+    await writeFile(alignedJsonPath, `${JSON.stringify({
+      alignedAt: new Date().toISOString(),
+      audioFile: getAlignedLyricsFileLabel(audioPath),
+      lines: alignment.alignedLines,
+      projectId,
+      report: alignment.report,
+      sourceLyricsFile: resolvedMedia.lyricsFile,
+      transcriptText: alignment.transcriptText,
+      transcriptWords: words,
+    }, null, 2)}\n`, "utf8");
+
+    relativeAlignedJsonPath = relativeProjectPath(alignedJsonPath);
+
+    if (hasAlignedLines && alignment.report.confidenceScore >= 0.45) {
+      alignedLines = alignment.alignedLines;
+      usedAlignedTimestamps = true;
+    }
+  }
 
   const payload = {
     generatedAt: new Date().toISOString(),
-    lines,
+    lines: fallbackLines,
     model: DEFAULT_WHISPER_MODEL,
     projectId,
     sourceLyricsFile: resolvedMedia.lyricsFile,
@@ -213,17 +259,36 @@ export async function generateLyricsArtifacts(projectId: string): Promise<Visual
   };
 
   await writeFile(jsonPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  await writeFile(srtPath, generateSrt(lines), "utf8");
-  await writeFile(assPath, generateAss(lines), "utf8");
+  await writeFile(srtPath, generateSrt({ alignedLines: usedAlignedTimestamps ? alignedLines : [], fallbackLines }), "utf8");
+  await writeFile(assPath, generateAss({ alignedLines: usedAlignedTimestamps ? alignedLines : [], fallbackLines }), "utf8");
 
   return {
-    assPath: relativeProjectPath(assPath),
-    jsonPath: relativeProjectPath(jsonPath),
-    lineCount: lines.length,
-    lines,
-    projectId,
-    srtPath: relativeProjectPath(srtPath),
-    wordCount: words.length,
-    words,
+    alignedJsonPath: relativeAlignedJsonPath,
+    alignmentReport,
+    artifacts: {
+      assPath: relativeProjectPath(assPath),
+      jsonPath: relativeProjectPath(jsonPath),
+      lineCount: alignedLines.length,
+      lines: alignedLines,
+      projectId,
+      srtPath: relativeProjectPath(srtPath),
+      wordCount: words.length,
+      words,
+    },
+    usedAlignedTimestamps,
   };
+}
+
+export async function generateLyricsArtifacts(projectId: string): Promise<VisualEngineLyricsArtifacts> {
+  const bundle = await generateLyricsBundle(projectId);
+  return bundle.artifacts;
+}
+
+export async function alignLyricsArtifacts(projectId: string): Promise<{
+  alignedJsonPath: string | null;
+  alignmentReport: LyricsAlignmentReport | null;
+  artifacts: VisualEngineLyricsArtifacts;
+  usedAlignedTimestamps: boolean;
+}> {
+  return generateLyricsBundle(projectId);
 }
