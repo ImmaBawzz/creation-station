@@ -8,6 +8,10 @@ Stabilize the existing v0.5 core workflow only:
 
 Idea → AI Factory Plan → Review → Revision → Approval → Tasks
 
+Creation Station remains orchestration-first across the broader platform flow:
+
+planning → generation → rendering → packaging
+
 The current system already has:
 - Next.js app structure
 - SQLite/Prisma data layer
@@ -26,7 +30,6 @@ Do not add:
 - External connectors
 - Asset vault as a major new module
 - Plugin system
-- ComfyUI integration
 - VSCode automation integration
 - Calendar/team systems
 - Marketplace
@@ -35,6 +38,27 @@ Do not add:
 - Cloud sync
 - Payments
 - Deployment infrastructure
+
+## Controlled Comfy Scope
+
+ComfyUI integration is allowed only under controlled scope rules:
+
+- ComfyUI is currently allowed only for image-generation workflows.
+- The only currently approved ComfyUI workflow is FLUX Schnell concept generation.
+- Comfy integration must remain modular under `src/modules/comfy/`.
+- Creation Station must stay orchestration-first: planning → generation → rendering → packaging.
+- Preserve stability-first architecture principles for any Comfy-related change.
+
+Do not add ComfyUI support for:
+
+- video generation
+- WAN integration
+- LTX integration
+- Flowframes integration
+- advanced multi-node experimental workflows
+- uncontrolled custom node expansion
+
+Any future video-oriented integration requires explicit milestone approval before implementation.
 
 ## Allowed Work
 
@@ -50,6 +74,7 @@ You may:
 - Fix Prisma issues
 - Fix broken imports
 - Fix broken server actions
+- Integrate approved ComfyUI image workflows within the controlled scope above
 - Run tests/checks
 - Commit small coherent changes
 
@@ -110,7 +135,8 @@ Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
 - More than 5 files need changes for one task.
-- A requested improvement requires a new subsystem.
+- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope.
+- A requested Comfy change expands into video workflows or any unapproved integration surface.
 - You are about to modify unrelated files.
 
 When stopped, write a short report in `docs/AGENT_RUN_REPORT.md`.
