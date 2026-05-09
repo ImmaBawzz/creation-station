@@ -47,12 +47,24 @@ next-env.d.ts
 /.creation-station/
 /input/
 /output/
+/.debug/
+/.vscode/tasks.json
 /visual-workspace/projects/*/renders/final.mp4
+/visual-workspace/projects/*/renders/*.mp4
+/visual-workspace/projects/*/renders/*.mov
 /visual-workspace/projects/*/packages/*.zip
+/visual-workspace/projects/*/images/*.png
+/visual-workspace/projects/*/images/*.jpg
+/visual-workspace/projects/*/images/*.jpeg
+/visual-workspace/projects/*/audio/*.mp3
+/visual-workspace/projects/*/audio/*.wav
+/visual-workspace/projects/*/video/*.mp4
+/visual-workspace/projects/*/video/*.mov
 /visual-workspace/projects/*/lyrics/lyrics.json
 /visual-workspace/projects/*/lyrics/lyrics-aligned.json
 /visual-workspace/projects/*/lyrics/lyrics.srt
 /visual-workspace/projects/*/lyrics/lyrics.ass
+
 
 # playwright runtime artifacts
 playwright.e2e.db
