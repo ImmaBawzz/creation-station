@@ -51,14 +51,33 @@ ComfyUI integration is allowed only under controlled scope rules:
 
 Do not add ComfyUI support for:
 
-- video generation
 - WAN integration
 - LTX integration
 - Flowframes integration
 - advanced multi-node experimental workflows
 - uncontrolled custom node expansion
 
-Any future video-oriented integration requires explicit milestone approval before implementation.
+## Controlled Video Orchestration Scope
+
+Image-to-video work is allowed only under a narrow, orchestration-first scope:
+
+- The approved module boundary is `src/modules/video-generation/`.
+- The first milestone must be orchestration-only and must not call real video models.
+- Allowed initial work is limited to manifest structures, queue/status orchestration, provider adapter interfaces, a `mock-video-provider`, and UI placeholders or status surfaces for scene video generation.
+- The approved initial manifest output is `sceneVideos.json`.
+- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
+
+Still blocked until separate approval:
+
+- real WAN execution
+- real LTX execution
+- real Kling execution
+- real Hunyuan execution
+- Flowframes interpolation
+- automatic custom node installs
+- uncontrolled video workflow imports
+
+Real video providers require a separate governance update and a dedicated validation branch before implementation.
 
 ## Allowed Work
 
@@ -75,6 +94,7 @@ You may:
 - Fix broken imports
 - Fix broken server actions
 - Integrate approved ComfyUI image workflows within the controlled scope above
+- Add orchestration-only video-generation scaffolding within `src/modules/video-generation/` when it stays inside the approved mock-provider boundary above
 - Run tests/checks
 - Commit small coherent changes
 
@@ -135,8 +155,8 @@ Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
 - More than 5 files need changes for one task.
-- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope.
-- A requested Comfy change expands into video workflows or any unapproved integration surface.
+- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope and the controlled `src/modules/video-generation/` orchestration-only scope.
+- A requested video-generation change attempts real provider execution, custom node expansion, or any unapproved integration surface beyond the mock-provider orchestration boundary.
 - You are about to modify unrelated files.
 
 When stopped, write a short report in `docs/AGENT_RUN_REPORT.md`.
