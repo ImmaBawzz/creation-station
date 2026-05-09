@@ -110,6 +110,7 @@ You may:
 8. Keep the AI provider isolated in `src/lib/aiProvider.ts`.
 9. Keep prompt construction isolated in `src/lib/factoryPrompt.ts`.
 10. Prefer helper files over duplicating UI logic.
+11. Before any approved orchestration milestone that is expected to touch more than 5 files, explicitly list the planned file set before execution and keep the implementation narrowly scoped to that list.
 
 ## Required Validation After Every Change
 
@@ -120,6 +121,15 @@ npm run lint
 npx tsc --noEmit
 npx prisma generate
 npm run dev
+```
+
+For approved orchestration milestones before commit, also run:
+
+```powershell
+npm run lint
+npx tsc --noEmit
+npx prisma generate
+npm run build
 ```
 
 Then manually verify:
@@ -154,9 +164,44 @@ Suggested commit style:
 Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
-- More than 5 files need changes for one task.
+- More than 5 files need changes for one task, unless the work is a pre-approved orchestration milestone within the existing architecture and satisfies every orchestration exception rule below.
 - A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope and the controlled `src/modules/video-generation/` orchestration-only scope.
 - A requested video-generation change attempts real provider execution, custom node expansion, or any unapproved integration surface beyond the mock-provider orchestration boundary.
 - You are about to modify unrelated files.
+
+## Controlled Multi-File Orchestration Exception
+
+The default expectation is still to stay within 5 changed files for small fixes, bug fixes, refactors, UI tweaks, and utility updates.
+
+Changes above that threshold are allowed only when all conditions are true:
+
+- the task is pre-approved
+- the task belongs to the existing architecture
+- no new external infrastructure is introduced
+- no dependency expansion is introduced
+- no new model families are introduced
+- no security scope changes are introduced
+- no database schema expansion is introduced unless explicitly requested
+
+Additional requirements for approved multi-file orchestration milestones:
+
+- The agent must explicitly list affected files before execution.
+- The agent must preserve narrow scope and avoid opportunistic expansion.
+- Validation before commit must include `npm run lint`, `npx tsc --noEmit`, `npx prisma generate`, and `npm run build`.
+
+Approved examples:
+
+- scene orchestration
+- media orchestration
+- workflow orchestration
+- queue orchestration
+- manifest systems
+- adapter layers
+
+Still blocked:
+
+- unapproved infrastructure expansion
+- unapproved model ecosystems
+- unapproved external services
 
 When stopped, write a short report in `docs/AGENT_RUN_REPORT.md`.
