@@ -140,6 +140,53 @@ type ScenePlanResponse = {
   timestampSource?: string;
 };
 
+type SceneExecutionItemStatus = "pending" | "generating" | "completed" | "failed" | "skipped";
+type SceneExecutionStatus = "idle" | "running" | "paused" | "cancelling" | "cancelled" | "completed";
+
+type SceneExecutionAsset = {
+  attempts: number;
+  completedAt?: string;
+  error?: string;
+  id: string;
+  imagePath?: string;
+  manifestPath?: string;
+  priority: ScenePriority;
+  prompt: string;
+  promptId?: string;
+  retryLimit: number;
+  sceneId: string;
+  startedAt?: string;
+  status: SceneExecutionItemStatus;
+  workflowType: WorkflowType;
+};
+
+type SceneExecutionState = {
+  approvedSceneIds: string[];
+  assets: SceneExecutionAsset[];
+  concurrency: number;
+  createdAt: string;
+  negativePrompt: string;
+  progress: {
+    completed: number;
+    failed: number;
+    generating: number;
+    processed: number;
+    skipped: number;
+    total: number;
+  };
+  projectId: string;
+  status: SceneExecutionStatus;
+  updatedAt: string;
+};
+
+type SceneExecutionResponse = {
+  details?: string[];
+  error?: string;
+  projectId?: string;
+  state?: SceneExecutionState;
+  success?: boolean;
+};
+
 function formatSceneTime(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
@@ -168,9 +215,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [isGeneratingConcept, setIsGeneratingConcept] = useState(false);
   const [lyricsMessage, setLyricsMessage] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  const [sceneExecutionAction, setSceneExecutionAction] = useState<string | null>(null);
+  const [sceneExecutionMessage, setSceneExecutionMessage] = useState<string>("");
+  const [sceneExecutionState, setSceneExecutionState] = useState<SceneExecutionState | null>(null);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isGeneratingScenePlan, setIsGeneratingScenePlan] = useState(false);
-  const [isQueueingScenePlan, setIsQueueingScenePlan] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [isRefreshingWorkflowState, setIsRefreshingWorkflowState] = useState(false);
   const [scenePlan, setScenePlan] = useState<ScenePlanScene[]>([]);
@@ -180,8 +229,10 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [workflowStatusByType, setWorkflowStatusByType] = useState<Record<WorkflowType, WorkflowStatusResponse>>(DEFAULT_WORKFLOW_STATUS);
 
   const isConceptJobActive = conceptStatus !== null && conceptStatus !== "completed" && conceptStatus !== "failed" && conceptStatus !== "timeout";
+  const isSceneExecutionActive = sceneExecutionState?.status === "running" || sceneExecutionState?.status === "cancelling";
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
   const approvedScenes = scenePlan.filter((scene) => approvedSceneIds.includes(scene.id));
+  const sceneExecutionAssetsBySceneId = new Map(sceneExecutionState?.assets.map((asset) => [asset.sceneId, asset]) ?? []);
   const selectedWorkflowNote = selectedWorkflow.errors?.[0]
     ?? (selectedWorkflow.models?.missing && selectedWorkflow.models.missing.length > 0
       ? `Missing model files: ${selectedWorkflow.models.missing.join(", ")}`
@@ -220,6 +271,57 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
     return () => {
       cancelled = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function loadSceneExecutionState() {
+      try {
+        const response = await fetch(`/api/scene-execution?projectId=${encodeURIComponent(projectId)}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setSceneExecutionState(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as SceneExecutionResponse;
+
+        if (cancelled || !payload.state) {
+          return;
+        }
+
+        setSceneExecutionState(payload.state);
+
+        if (payload.state.approvedSceneIds.length > 0) {
+          setApprovedSceneIds(payload.state.approvedSceneIds);
+        }
+
+        if (payload.state.status === "running" || payload.state.status === "cancelling") {
+          timer = setTimeout(() => {
+            void loadSceneExecutionState();
+          }, 1_500);
+        }
+      } catch {
+        if (!cancelled) {
+          setSceneExecutionState(null);
+        }
+      }
+    }
+
+    void loadSceneExecutionState();
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
   }, [projectId]);
 
@@ -566,56 +668,52 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     setScenePlanMessage(scenePlan.length > 0 ? `Approved ${scenePlan.length} scenes.` : "Generate a scene plan first.");
   }
 
-  async function handleQueueApprovedScenes() {
-    if (approvedScenes.length === 0) {
-      setScenePlanMessage("Approve at least one scene before queueing image generation.");
+  async function handleSceneExecutionAction(action: "start" | "pause" | "resume" | "cancel") {
+    if (action === "start" && approvedScenes.length === 0) {
+      setSceneExecutionMessage("Approve at least one scene before starting batch generation.");
       return;
     }
 
-    setIsQueueingScenePlan(true);
-    setScenePlanMessage("Queueing approved scenes...");
+    setSceneExecutionAction(action);
 
-    let queued = 0;
-    const failures: string[] = [];
+    try {
+      const response = await fetch("/api/scene-execution", {
+        body: JSON.stringify({
+          action,
+          approvedSceneIds: action === "start" ? approvedSceneIds : undefined,
+          negativePrompt: action === "start" ? negativeConceptPrompt.trim() : undefined,
+          projectId,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as SceneExecutionResponse;
 
-    for (const scene of approvedScenes) {
-      const workflow = workflowStatusByType[scene.workflowType] ?? DEFAULT_WORKFLOW_STATUS[scene.workflowType];
-
-      if (!workflow.selectable) {
-        failures.push(`${scene.id}: ${workflow.errors?.[0] ?? "workflow unavailable"}`);
-        continue;
+      if (!response.ok || !payload.state) {
+        const detailText = payload.details && payload.details.length > 0
+          ? ` ${payload.details.join("; ")}`
+          : "";
+        setSceneExecutionMessage(`${payload.error ?? "Scene execution action failed."}${detailText}`);
+        return;
       }
 
-      try {
-        const response = await fetch("/api/comfy/generate-image", {
-          body: JSON.stringify({
-            negativePrompt: negativeConceptPrompt.trim(),
-            projectId,
-            prompt: buildScenePrompt(scene),
-            workflowType: scene.workflowType,
-          }),
-          headers: { "content-type": "application/json" },
-          method: "POST",
-        });
-        const payload = (await response.json()) as ComfyGenerateResponse;
+      setSceneExecutionState(payload.state);
+      setApprovedSceneIds(payload.state.approvedSceneIds);
 
-        if (!response.ok) {
-          failures.push(`${scene.id}: ${payload.error ?? "queue failed"}`);
-          continue;
-        }
-
-        queued += 1;
-      } catch (error) {
-        failures.push(`${scene.id}: ${error instanceof Error ? error.message : "queue failed"}`);
+      if (action === "start") {
+        setSceneExecutionMessage(`Generating approved scenes: ${payload.state.progress.processed}/${payload.state.progress.total} processed.`);
+      } else if (action === "pause") {
+        setSceneExecutionMessage("Scene execution paused.");
+      } else if (action === "resume") {
+        setSceneExecutionMessage("Scene execution resumed.");
+      } else {
+        setSceneExecutionMessage("Scene execution cancelled.");
       }
+    } catch (error) {
+      setSceneExecutionMessage(error instanceof Error ? error.message : "Scene execution action failed.");
+    } finally {
+      setSceneExecutionAction(null);
     }
-
-    setScenePlanMessage(
-      failures.length > 0
-        ? `Queued ${queued} scenes. ${failures.join(" | ")}`
-        : `Queued ${queued} approved scenes for image generation.`,
-    );
-    setIsQueueingScenePlan(false);
   }
 
   async function handleRender() {
@@ -750,11 +848,35 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
         </button>
         <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isQueueingScenePlan || approvedScenes.length === 0}
-          onClick={() => void handleQueueApprovedScenes()}
+          disabled={sceneExecutionAction !== null || approvedScenes.length === 0 || isSceneExecutionActive}
+          onClick={() => void handleSceneExecutionAction("start")}
           type="button"
         >
-          {isQueueingScenePlan ? "Queueing Scenes..." : `Queue Approved Scenes (${approvedScenes.length})`}
+          {sceneExecutionAction === "start" ? "Starting Batch..." : `Generate Approved Scenes (${approvedScenes.length})`}
+        </button>
+        <button
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "running"}
+          onClick={() => void handleSceneExecutionAction("pause")}
+          type="button"
+        >
+          {sceneExecutionAction === "pause" ? "Pausing..." : "Pause Batch"}
+        </button>
+        <button
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "paused"}
+          onClick={() => void handleSceneExecutionAction("resume")}
+          type="button"
+        >
+          {sceneExecutionAction === "resume" ? "Resuming..." : "Resume Batch"}
+        </button>
+        <button
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={sceneExecutionAction !== null || !sceneExecutionState || (sceneExecutionState.status !== "running" && sceneExecutionState.status !== "paused" && sceneExecutionState.status !== "cancelling")}
+          onClick={() => void handleSceneExecutionAction("cancel")}
+          type="button"
+        >
+          {sceneExecutionAction === "cancel" ? "Cancelling..." : "Cancel Batch"}
         </button>
         <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -785,6 +907,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       {conceptMessage ? <p className="text-sm text-zinc-400">{conceptMessage}</p> : null}
       {lyricsMessage ? <p className="text-sm text-zinc-400">{lyricsMessage}</p> : null}
       {scenePlanMessage ? <p className="text-sm text-zinc-400">{scenePlanMessage}</p> : null}
+      {sceneExecutionMessage ? <p className="text-sm text-zinc-400">{sceneExecutionMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}
       {scenePlan.length > 0 ? (
         <div className="mt-2 w-full space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
@@ -793,7 +916,10 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
               <h3 className="text-sm font-semibold text-zinc-100">Planned shots</h3>
               <p className="text-xs text-zinc-400">Review, approve, and regenerate individual scenes before image generation.</p>
             </div>
-            <p className="text-xs text-zinc-500">{approvedScenes.length} of {scenePlan.length} approved</p>
+            <div className="text-right text-xs text-zinc-500">
+              <p>{approvedScenes.length} of {scenePlan.length} approved</p>
+              {sceneExecutionState ? <p>{sceneExecutionState.progress.processed}/{sceneExecutionState.progress.total} scenes complete</p> : null}
+            </div>
           </div>
           <div className="space-y-3">
             {scenePlan.map((scene) => (
@@ -801,6 +927,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {sceneExecutionAssetsBySceneId.get(scene.id) ? (
+                        <span className={`rounded-full border px-2 py-1 ${getWorkflowBadgeClass(sceneExecutionAssetsBySceneId.get(scene.id)?.status === "completed" ? "valid" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "generating" ? "Needs validation" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "failed" ? "Comfy offline" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "skipped" ? "invalid" : "Needs validation")}`}>
+                          {sceneExecutionAssetsBySceneId.get(scene.id)?.status}
+                        </span>
+                      ) : null}
                       <span className="rounded-full border border-zinc-700 px-2 py-1 text-zinc-200">{scene.id}</span>
                       <span className="rounded-full border border-zinc-700 px-2 py-1 text-zinc-200">{formatSceneTime(scene.startTime)} - {formatSceneTime(scene.endTime)}</span>
                       <span className="rounded-full border border-zinc-700 px-2 py-1 text-zinc-200">{scene.generationType}</span>
@@ -811,12 +942,15 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                     <p className="text-sm text-zinc-400">Tone: {scene.emotionalTone}</p>
                     <p className="text-sm text-zinc-300">{scene.visualDescription}</p>
                     <p className="text-sm text-zinc-400">{scene.cameraDirection}</p>
+                    {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath ? <p className="text-sm text-emerald-300">Asset: {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath}</p> : null}
+                    {sceneExecutionAssetsBySceneId.get(scene.id)?.error ? <p className="text-sm text-amber-300">{sceneExecutionAssetsBySceneId.get(scene.id)?.error}</p> : null}
                   </div>
                   <div className="flex min-w-44 flex-col items-stretch gap-2">
                     <label className="flex items-center gap-2 text-sm text-zinc-300">
                       <input
                         checked={approvedSceneIds.includes(scene.id)}
                         className="rounded border-zinc-700 bg-zinc-950"
+                        disabled={isSceneExecutionActive}
                         onChange={() => handleToggleSceneApproval(scene.id)}
                         type="checkbox"
                       />
@@ -824,7 +958,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                     </label>
                     <button
                       className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isGeneratingScenePlan}
+                      disabled={isGeneratingScenePlan || isSceneExecutionActive}
                       onClick={() => void handleGenerateScenePlan(scene.id)}
                       type="button"
                     >
