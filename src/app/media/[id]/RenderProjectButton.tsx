@@ -346,6 +346,133 @@ type TimelinePlanResponse = {
   timelinePlan?: TimelinePlan;
 };
 
+type ProviderHealthStatus = "online" | "offline" | "maintenance" | "deprecated" | "overloaded";
+type VideoProviderId = "wan" | "kling" | "ltx" | "runway" | "pika" | "local-mock";
+
+type RankedProviderCandidate = {
+  breakdown: {
+    camera: number;
+    cost: number;
+    duration: number;
+    environment: number;
+    facial: number;
+    health: number;
+    motion: number;
+    realism: number;
+    stylization: number;
+    total: number;
+  };
+  estimatedCost: number;
+  fallbackProviders: VideoProviderId[];
+  health: {
+    notes?: string;
+    queueLoad: number;
+    status: ProviderHealthStatus;
+  };
+  policyNotes: string[];
+  providerId: VideoProviderId;
+  providerName: string;
+};
+
+type ProviderExecutionPlanScene = {
+  estimatedCost: number;
+  fallbackProviders: VideoProviderId[];
+  healthStatus: ProviderHealthStatus;
+  primaryProvider: VideoProviderId;
+  rankedProviders: RankedProviderCandidate[];
+  reasons: string[];
+  sceneId: string;
+  sourceImage: string;
+};
+
+type ProviderExecutionPlan = {
+  createdAt: string;
+  estimatedTotalCost: number;
+  projectId: string;
+  providerAllocation: Array<{
+    estimatedCost: number;
+    providerId: VideoProviderId;
+    sceneIds: string[];
+  }>;
+  scenePlans: ProviderExecutionPlanScene[];
+  sourceManifests: {
+    providerExecutionPlan: string;
+    timelinePlan: string;
+  };
+  updatedAt: string;
+};
+
+type ProviderExecutionPlanResponse = {
+  details?: string[];
+  error?: string;
+  projectId?: string;
+  providerExecutionPlan?: ProviderExecutionPlan;
+  success?: boolean;
+};
+
+type FinalAssemblyStatus = "idle" | "assembling" | "rendering" | "completed" | "failed";
+type FinalAssemblyStage = "scene-assembly" | "subtitle-prep" | "audio-sync" | "render-master" | "export-profiles";
+type ExportProfileId = "youtube-16-9" | "tiktok-9-16" | "instagram-reels" | "lyric-only" | "teaser-trailer";
+
+type FinalAssemblyScene = {
+  correctedDuration: number;
+  expectedDuration: number;
+  fallbackReason?: string;
+  isFallback: boolean;
+  providerId: string;
+  sceneId: string;
+  sourceKind: "scene-video" | "fallback-image";
+  sourcePath: string;
+  timelineOrder: number;
+  transition: "hard-cut" | "cinematic-fade" | "flash-cut" | "beat-synced" | "atmospheric-dissolve";
+};
+
+type FinalAssemblyState = {
+  artifacts: {
+    assembledVideoPath?: string;
+    exportArtifacts: Array<{ profileId: ExportProfileId; relativePath: string }>;
+    subtitleArtifacts: Array<{ mode: "karaoke" | "cinematic" | "lyric-highlight"; outputPath: string; safeZoneMarginV: number }>;
+  };
+  createdAt: string;
+  currentStage: FinalAssemblyStage;
+  error?: string;
+  projectId: string;
+  scenes: FinalAssemblyScene[];
+  sourceManifests: {
+    audio: string;
+    finalAssembly: string;
+    lyrics: string;
+    providerExecutionPlan: string;
+    sceneExecutionManifest: string;
+    timelinePlan: string;
+  };
+  status: FinalAssemblyStatus;
+  subtitleCues: Array<{ end: number; lineIndex: number; safeZoneMarginV: number; start: number; text: string }>;
+  updatedAt: string;
+  warnings: Array<{ code: string; message: string; sceneId?: string }>;
+};
+
+type FinalAssemblyResponse = {
+  details?: string[];
+  error?: string;
+  projectId?: string;
+  result?: {
+    duration: string;
+    exportPaths: Record<ExportProfileId, string>;
+    outputPath: string;
+    packagePath: string;
+    primaryExportProfile: ExportProfileId;
+    projectId: string;
+    renderPath: string;
+    status: FinalAssemblyStatus;
+    success: boolean;
+    usedAudio: string;
+    usedImage: string;
+  };
+  state?: FinalAssemblyState;
+  success?: boolean;
+};
+
 function formatSceneTime(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
@@ -374,11 +501,16 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [isGeneratingConcept, setIsGeneratingConcept] = useState(false);
   const [lyricsMessage, setLyricsMessage] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  const [finalAssemblyMessage, setFinalAssemblyMessage] = useState<string>("");
+  const [finalAssemblyState, setFinalAssemblyState] = useState<FinalAssemblyState | null>(null);
   const [isGeneratingMotionPlan, setIsGeneratingMotionPlan] = useState(false);
+  const [isGeneratingProviderPlan, setIsGeneratingProviderPlan] = useState(false);
   const [isGeneratingTimelinePlan, setIsGeneratingTimelinePlan] = useState(false);
   const [isSubmittingSceneVideos, setIsSubmittingSceneVideos] = useState(false);
   const [motionPlan, setMotionPlan] = useState<SceneMotionPlan | null>(null);
   const [motionPlanMessage, setMotionPlanMessage] = useState<string>("");
+  const [providerExecutionPlan, setProviderExecutionPlan] = useState<ProviderExecutionPlan | null>(null);
+  const [providerExecutionPlanMessage, setProviderExecutionPlanMessage] = useState<string>("");
   const [timelinePlan, setTimelinePlan] = useState<TimelinePlan | null>(null);
   const [timelinePlanMessage, setTimelinePlanMessage] = useState<string>("");
   const [sceneExecutionAction, setSceneExecutionAction] = useState<string | null>(null);
@@ -402,6 +534,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
   const approvedScenes = scenePlan.filter((scene) => approvedSceneIds.includes(scene.id));
   const motionPlanBySceneId = new Map(motionPlan?.scenes.map((scene) => [scene.sceneId, scene]) ?? []);
+  const providerPlanBySceneId = new Map(providerExecutionPlan?.scenePlans.map((scene) => [scene.sceneId, scene]) ?? []);
   const timelineSequenceBySceneId = new Map(timelinePlan?.sceneSequencing.map((scene) => [scene.sceneId, scene]) ?? []);
   const sceneExecutionAssetsBySceneId = new Map(sceneExecutionState?.assets.map((asset) => [asset.sceneId, asset]) ?? []);
   const sceneVideoJobsBySceneId = new Map(sceneVideoState?.jobs.map((job) => [job.sceneId, job]) ?? []);
@@ -470,6 +603,60 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       }
     }
 
+    async function loadProviderExecutionPlan() {
+      try {
+        const response = await fetch(`/api/video-generation/projects/${projectId}/governance`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setProviderExecutionPlan(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as ProviderExecutionPlanResponse;
+
+        if (cancelled || !payload.providerExecutionPlan) {
+          return;
+        }
+
+        setProviderExecutionPlan(payload.providerExecutionPlan);
+      } catch {
+        if (!cancelled) {
+          setProviderExecutionPlan(null);
+        }
+      }
+    }
+
+    async function loadFinalAssemblyState() {
+      try {
+        const response = await fetch(`/api/final-assembly/projects/${projectId}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setFinalAssemblyState(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as FinalAssemblyResponse;
+
+        if (cancelled || !payload.state) {
+          return;
+        }
+
+        setFinalAssemblyState(payload.state);
+      } catch {
+        if (!cancelled) {
+          setFinalAssemblyState(null);
+        }
+      }
+    }
+
     async function loadScenePlan() {
       try {
         const response = await fetch(`/api/scene-planner/generate?projectId=${encodeURIComponent(projectId)}`, {
@@ -495,6 +682,8 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
     void loadScenePlan();
     void loadMotionPlan();
+    void loadFinalAssemblyState();
+    void loadProviderExecutionPlan();
     void loadTimelinePlan();
 
     return () => {
@@ -1087,27 +1276,61 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
   }
 
-  async function handleRender() {
-    setIsRendering(true);
-    setMessage("");
+  async function handleGenerateProviderExecutionPlan() {
+    setIsGeneratingProviderPlan(true);
+    setProviderExecutionPlanMessage("Simulating provider governance plan...");
 
     try {
-      const response = await fetch(`/api/visual-engine/projects/${projectId}/render`, {
+      const response = await fetch(`/api/video-generation/projects/${projectId}/governance`, {
         method: "POST",
       });
-      const payload = (await response.json()) as RenderResponse;
+      const payload = (await response.json()) as ProviderExecutionPlanResponse;
 
-      if (!response.ok) {
+      if (!response.ok || !payload.providerExecutionPlan) {
         const detailText = payload.details && payload.details.length > 0
           ? ` ${payload.details.join("; ")}`
           : "";
-        setMessage(`${payload.error ?? "Render failed."}${detailText}`);
+        setProviderExecutionPlanMessage(`${payload.error ?? "Provider governance simulation failed."}${detailText}`);
         return;
       }
 
-      setMessage(`Render ready: ${payload.renderPath ?? "final output created"}`);
+      setProviderExecutionPlan(payload.providerExecutionPlan);
+      setProviderExecutionPlanMessage(
+        `Provider plan ready: ${payload.providerExecutionPlan.scenePlans.length} scenes allocated across ${payload.providerExecutionPlan.providerAllocation.length} simulated providers.`,
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Render failed.");
+      setProviderExecutionPlanMessage(error instanceof Error ? error.message : "Provider governance simulation failed.");
+    } finally {
+      setIsGeneratingProviderPlan(false);
+    }
+  }
+
+  async function handleRender() {
+    setIsRendering(true);
+    setFinalAssemblyMessage("Assembling final video...");
+
+    try {
+      setFinalAssemblyState((current) => current ? { ...current, status: "assembling" } : current);
+
+      const response = await fetch(`/api/final-assembly/projects/${projectId}`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as FinalAssemblyResponse;
+
+      if (!response.ok || !payload.state || !payload.result) {
+        const detailText = payload.details && payload.details.length > 0
+          ? ` ${payload.details.join("; ")}`
+          : "";
+        setFinalAssemblyState((current) => current ? { ...current, error: payload.error ?? "Final assembly failed.", status: "failed" } : current);
+        setFinalAssemblyMessage(`${payload.error ?? "Final assembly failed."}${detailText}`);
+        return;
+      }
+
+      setFinalAssemblyState(payload.state);
+      setFinalAssemblyMessage(`Final assembly complete: ${payload.result.renderPath}`);
+    } catch (error) {
+      setFinalAssemblyState((current) => current ? { ...current, error: error instanceof Error ? error.message : "Final assembly failed.", status: "failed" } : current);
+      setFinalAssemblyMessage(error instanceof Error ? error.message : "Final assembly failed.");
     } finally {
       setIsRendering(false);
     }
@@ -1256,6 +1479,14 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           {isGeneratingTimelinePlan ? "Generating Timeline Plan..." : "Generate Timeline Plan"}
         </button>
         <button
+          className="rounded-lg border border-emerald-700/70 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isGeneratingProviderPlan || !timelinePlan}
+          onClick={() => void handleGenerateProviderExecutionPlan()}
+          type="button"
+        >
+          {isGeneratingProviderPlan ? "Simulating Providers..." : "Simulate Provider Plan"}
+        </button>
+        <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "running"}
           onClick={() => void handleSceneExecutionAction("pause")}
@@ -1285,7 +1516,13 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           onClick={handleRender}
           type="button"
         >
-          {isRendering ? "Rendering..." : "Render Project"}
+          {isRendering
+            ? finalAssemblyState?.status === "rendering"
+              ? "Rendering Final Video..."
+              : "Assembling Final Video..."
+            : finalAssemblyState?.status === "completed"
+            ? "Rebuild Final Video"
+            : "Assemble Final Video"}
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1313,6 +1550,8 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       {sceneVideoMessage ? <p className="text-sm text-zinc-400">{sceneVideoMessage}</p> : null}
       {motionPlanMessage ? <p className="text-sm text-zinc-400">{motionPlanMessage}</p> : null}
       {timelinePlanMessage ? <p className="text-sm text-zinc-400">{timelinePlanMessage}</p> : null}
+      {providerExecutionPlanMessage ? <p className="text-sm text-zinc-400">{providerExecutionPlanMessage}</p> : null}
+      {finalAssemblyMessage ? <p className="text-sm text-zinc-400">{finalAssemblyMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}
       {scenePlan.length > 0 ? (
         <div className="mt-2 w-full space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
@@ -1327,8 +1566,25 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
               {sceneVideoState ? <p>{sceneVideoState.progress.processed}/{sceneVideoState.progress.total} scene videos processed</p> : null}
               {motionPlan ? <p>{motionPlan.scenes.length} motion instructions generated</p> : null}
               {timelinePlan ? <p>{timelinePlan.sceneSequencing.length} timeline scenes across {timelinePlan.totalRuntime.toFixed(2)}s</p> : null}
+              {providerExecutionPlan ? <p>{providerExecutionPlan.providerAllocation.length} simulated providers across ${providerExecutionPlan.estimatedTotalCost.toFixed(2)}</p> : null}
+              {finalAssemblyState ? <p>Final assembly {finalAssemblyState.status} at {finalAssemblyState.currentStage}</p> : null}
             </div>
           </div>
+          {finalAssemblyState ? (
+            <div className="rounded-xl border border-rose-900/60 bg-rose-950/20 p-3 text-xs text-rose-100">
+              <p className="font-medium">Final assembly manifest: {finalAssemblyState.sourceManifests.finalAssembly}</p>
+              <p>Status: {finalAssemblyState.status} | Stage: {finalAssemblyState.currentStage}</p>
+              <p>Exports: {finalAssemblyState.artifacts.exportArtifacts.map((artifact) => artifact.profileId).join(", ") || "pending"}</p>
+              <p>Warnings: {finalAssemblyState.warnings.length}</p>
+            </div>
+          ) : null}
+          {providerExecutionPlan ? (
+            <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-3 text-xs text-emerald-100">
+              <p className="font-medium">Provider plan manifest: {providerExecutionPlan.sourceManifests.providerExecutionPlan}</p>
+              <p>Estimated total cost: ${providerExecutionPlan.estimatedTotalCost.toFixed(2)}</p>
+              <p>Allocation: {providerExecutionPlan.providerAllocation.map((entry) => `${entry.providerId} (${entry.sceneIds.length})`).join(", ")}</p>
+            </div>
+          ) : null}
           {timelinePlan ? (
             <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-3 text-xs text-cyan-100">
               <p className="font-medium">Timeline plan manifest: {timelinePlan.sourceManifests.timelinePlan}</p>
@@ -1397,6 +1653,20 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                         <p>Adjusted duration: {timelineSequenceBySceneId.get(scene.id)?.adjustedDuration.toFixed(2)}s</p>
                         <p>Transition: {timelineSequenceBySceneId.get(scene.id)?.transitionStyle}</p>
                         <p>Climax assigned: {timelineSequenceBySceneId.get(scene.id)?.climaxAssigned ? "yes" : "no"}</p>
+                      </div>
+                    ) : null}
+                    {providerPlanBySceneId.get(scene.id) ? (
+                      <div className="space-y-1 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3 text-sm text-emerald-100">
+                        <p>Primary provider: {providerPlanBySceneId.get(scene.id)?.primaryProvider}</p>
+                        <p>Fallbacks: {providerPlanBySceneId.get(scene.id)?.fallbackProviders.join(", ") || "none"}</p>
+                        <p>Health: {providerPlanBySceneId.get(scene.id)?.healthStatus}</p>
+                        <p>Estimated cost: ${providerPlanBySceneId.get(scene.id)?.estimatedCost.toFixed(2)}</p>
+                        <p>Reasons: {providerPlanBySceneId.get(scene.id)?.reasons.join(" ")}</p>
+                        <p>
+                          Ranked providers: {providerPlanBySceneId.get(scene.id)?.rankedProviders
+                            .map((candidate) => `${candidate.providerId} (${candidate.breakdown.total.toFixed(2)})`)
+                            .join(", ")}
+                        </p>
                       </div>
                     ) : null}
                     {sceneVideoJobsBySceneId.get(scene.id) ? (

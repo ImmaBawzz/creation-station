@@ -19,6 +19,7 @@ export function getVisualProjectAssetFolders(projectId: string): Record<string, 
 
   return {
     audio: path.join(root, "audio"),
+    exports: path.join(root, "exports"),
     images: path.join(root, "images"),
     lyrics: path.join(root, "lyrics"),
     packages: path.join(root, "packages"),
