@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 
 import { ComfyClient } from "@/modules/comfy/client";
-import { getComfyWorkflowPath, listSupportedComfyWorkflowTypes, type SupportedComfyWorkflowType } from "@/modules/comfy/queue";
+import { getComfyWorkflowPath, listSupportedComfyWorkflowTypes, type SupportedComfyWorkflowType } from "@/modules/comfy/workflows";
 import { readVisualProjectManifest } from "@/modules/visual-engine/manifest";
 
 export async function validateComfyGenerationRequest({

@@ -2,6 +2,54 @@
 
 import { useEffect, useState } from "react";
 
+type WorkflowType = "flux-fast-concept" | "flux-dev-cinematic";
+
+type WorkflowStatusLabel = "Available" | "Needs validation" | "Comfy offline" | "Timeout" | "Output missing" | "Validated";
+
+type WorkflowOption = {
+  label: string;
+  value: WorkflowType;
+};
+
+type WorkflowStatusResponse = {
+  available?: boolean;
+  errors?: string[];
+  label?: string;
+  selectable?: boolean;
+  status?: WorkflowStatusLabel;
+  valid?: boolean;
+  warnings?: string[];
+  workflowType?: WorkflowType;
+};
+
+const WORKFLOW_OPTIONS: WorkflowOption[] = [
+  { label: "Fast Concept", value: "flux-fast-concept" },
+  { label: "Cinematic Frame", value: "flux-dev-cinematic" },
+];
+
+const DEFAULT_WORKFLOW_STATUS: Record<WorkflowType, WorkflowStatusResponse> = {
+  "flux-dev-cinematic": {
+    available: false,
+    errors: [],
+    label: "Cinematic Frame",
+    selectable: false,
+    status: "Needs validation",
+    valid: false,
+    warnings: [],
+    workflowType: "flux-dev-cinematic",
+  },
+  "flux-fast-concept": {
+    available: true,
+    errors: [],
+    label: "Fast Concept",
+    selectable: true,
+    status: "Validated",
+    valid: true,
+    warnings: [],
+    workflowType: "flux-fast-concept",
+  },
+};
+
 type RenderResponse = {
   duration?: string;
   details?: string[];
@@ -64,8 +112,127 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState<string>("");
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
+  const [isRefreshingWorkflowState, setIsRefreshingWorkflowState] = useState(false);
+  const [selectedWorkflowType, setSelectedWorkflowType] = useState<WorkflowType>("flux-fast-concept");
+  const [workflowStatusByType, setWorkflowStatusByType] = useState<Record<WorkflowType, WorkflowStatusResponse>>(DEFAULT_WORKFLOW_STATUS);
 
   const isConceptJobActive = conceptStatus !== null && conceptStatus !== "completed" && conceptStatus !== "failed" && conceptStatus !== "timeout";
+  const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
+  const selectedWorkflowNote = selectedWorkflow.errors?.[0] ?? selectedWorkflow.warnings?.[0] ?? "";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshWorkflowStatus() {
+      setIsRefreshingWorkflowState(true);
+
+      try {
+        const results = await Promise.all(
+          WORKFLOW_OPTIONS.map(async ({ value }) => {
+            const response = await fetch(`/api/comfy/workflows/${value}/validate`, {
+              method: "POST",
+            });
+            const payload = (await response.json()) as WorkflowStatusResponse;
+            return [value, payload] as const;
+          }),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const nextState = { ...DEFAULT_WORKFLOW_STATUS };
+        for (const [value, payload] of results) {
+          nextState[value] = {
+            ...nextState[value],
+            ...payload,
+            workflowType: value,
+          };
+        }
+
+        setWorkflowStatusByType(nextState);
+      } catch (error) {
+        if (!cancelled) {
+          setConceptMessage(error instanceof Error ? error.message : "Workflow validation failed.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRefreshingWorkflowState(false);
+        }
+      }
+    }
+
+    void refreshWorkflowStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const cinematicState = workflowStatusByType["flux-dev-cinematic"];
+
+    if (!cinematicState || cinematicState.status !== "Available" || cinematicState.selectable) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function runSmokeValidation() {
+      try {
+        const response = await fetch("/api/comfy/workflows/flux-dev-cinematic/smoke-test", {
+          body: JSON.stringify({ projectId }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        });
+        const payload = (await response.json()) as WorkflowStatusResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        setWorkflowStatusByType((current) => ({
+          ...current,
+          "flux-dev-cinematic": {
+            ...current["flux-dev-cinematic"],
+            ...payload,
+            workflowType: "flux-dev-cinematic",
+          },
+        }));
+      } catch (error) {
+        if (!cancelled) {
+          setWorkflowStatusByType((current) => ({
+            ...current,
+            "flux-dev-cinematic": {
+              ...current["flux-dev-cinematic"],
+              errors: [error instanceof Error ? error.message : "Smoke validation failed."],
+              selectable: false,
+              status: "Needs validation",
+              valid: false,
+            },
+          }));
+        }
+      }
+    }
+
+    void runSmokeValidation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, workflowStatusByType]);
+
+  function getWorkflowBadgeClass(status: WorkflowStatusLabel | undefined): string {
+    if (status === "Validated" || status === "Available") {
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+    }
+
+    if (status === "Needs validation") {
+      return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+    }
+
+    return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+  }
 
   useEffect(() => {
     if (!activeConceptJobId) {
@@ -165,6 +332,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
     const negativePrompt = negativeConceptPrompt.trim();
 
+    if (!selectedWorkflow.selectable) {
+      setConceptMessage(selectedWorkflowNote || `${selectedWorkflow.label ?? "Workflow"} is not ready.`);
+      return;
+    }
+
     setIsGeneratingConcept(true);
     setConceptMessage("Submitting...");
 
@@ -174,7 +346,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           negativePrompt,
           projectId,
           prompt,
-          workflowType: "flux-fast-concept",
+          workflowType: selectedWorkflowType,
         }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -264,6 +436,25 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     <div className="flex flex-col items-start gap-2">
       <div className="grid w-full gap-2 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm text-zinc-300">
+          <span>Workflow</span>
+          <select
+            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-0"
+            onChange={(event) => setSelectedWorkflowType(event.target.value as WorkflowType)}
+            value={selectedWorkflowType}
+          >
+            {WORKFLOW_OPTIONS.map((option) => {
+              const status = workflowStatusByType[option.value] ?? DEFAULT_WORKFLOW_STATUS[option.value];
+              const enabled = option.value === "flux-fast-concept" || status.selectable;
+
+              return (
+                <option disabled={!enabled} key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-zinc-300">
           <span>Concept prompt</span>
           <input
             className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-0 placeholder:text-zinc-500"
@@ -273,7 +464,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
             value={conceptPrompt}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm text-zinc-300">
+        <label className="flex flex-col gap-1 text-sm text-zinc-300 md:col-span-2">
           <span>Negative prompt</span>
           <input
             className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-0 placeholder:text-zinc-500"
@@ -318,6 +509,22 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           {isRendering ? "Rendering..." : "Render Project"}
         </button>
       </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {WORKFLOW_OPTIONS.map((option) => {
+          const status = workflowStatusByType[option.value] ?? DEFAULT_WORKFLOW_STATUS[option.value];
+
+          return (
+            <span
+              className={`rounded-full border px-2 py-1 ${getWorkflowBadgeClass(status.status)}`}
+              key={option.value}
+            >
+              {status.label ?? option.label}: {status.status ?? "Needs validation"}
+            </span>
+          );
+        })}
+        {isRefreshingWorkflowState ? <span className="text-zinc-500">Checking workflows...</span> : null}
+      </div>
+      {selectedWorkflowNote ? <p className="text-sm text-zinc-400">{selectedWorkflowNote}</p> : null}
       {conceptMessage ? <p className="text-sm text-zinc-400">{conceptMessage}</p> : null}
       {lyricsMessage ? <p className="text-sm text-zinc-400">{lyricsMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}

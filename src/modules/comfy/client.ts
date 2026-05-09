@@ -230,6 +230,10 @@ export class ComfyClient {
     return collected;
   }
 
+  async getHistory(promptId: string): Promise<Record<string, unknown>> {
+    return this.fetchHistory(promptId);
+  }
+
   async downloadOutput(output: ComfyOutputRef): Promise<Buffer> {
     let response: Response;
 
