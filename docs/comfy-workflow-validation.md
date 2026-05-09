@@ -18,6 +18,7 @@ The validation route performs static workflow checks without requiring direct Co
 - model filename exists in the workflow
 - VAE filename exists in the workflow
 - both CLIP filenames exist in the workflow
+- exact referenced UNET, CLIP, and VAE filenames exist in the local Comfy models directory for production-role workflows when that directory can be resolved
 
 If the static checks pass, the route also probes ComfyUI availability. A structurally valid workflow can still be marked unavailable when ComfyUI is offline.
 
@@ -70,6 +71,7 @@ Common causes:
 - missing prompt, save, or width/height node IDs
 - non-mutable prompt or save node widgets
 - missing model, VAE, or CLIP filenames in the workflow JSON
+- missing local model files such as `flux1-dev.safetensors`, `clip_l.safetensors`, or `ae.safetensors`
 
 ### Comfy Offline
 
@@ -102,7 +104,7 @@ Symptoms:
 ## Recovery Path
 
 1. Call the validation route and inspect `errors`, `warnings`, `modelFiles`, and `nodeMapping`.
-2. If validation fails, fix the workflow JSON under `src/modules/comfy/workflows/` and re-run validation.
+2. If validation fails, fix the workflow JSON under `src/modules/comfy/workflows/` or install the exact missing model files in the Comfy models directory, then re-run validation.
 3. If ComfyUI is offline, restore the Comfy service and re-run validation. The app build remains unaffected.
 4. If the smoke test times out, increase `CREATION_STATION_COMFY_TIMEOUT_MS` and re-run the smoke test.
 5. If output is missing, inspect `.debug/comfy-history-[promptId].json` for the exact Comfy history payload, then fix the workflow or output path issue and re-run the smoke test.

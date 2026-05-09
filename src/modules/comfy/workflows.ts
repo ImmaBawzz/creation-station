@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 
 import { ComfyError } from "@/modules/comfy/client";
@@ -38,6 +39,16 @@ export type ComfyWorkflowValidationResult = {
   valid: boolean;
   warnings: string[];
   workflowType: SupportedComfyWorkflowType;
+};
+
+type WorkflowModelReference = {
+  filename: string;
+  searchDirectories: string[];
+};
+
+type ComfyWorkflowValidationOptions = {
+  modelsRoot?: string | null;
+  verifyModelFiles?: boolean;
 };
 
 export type ComfyWorkflowStatus =
@@ -149,6 +160,14 @@ const WIDGET_NAME_MAP: Record<string, string[]> = {
   UNETLoader: ["unet_name", "weight_dtype"],
   VAELoader: ["vae_name"],
 };
+
+const MODEL_SEARCH_DIRECTORIES = {
+  clip: ["clip", "text_encoders"],
+  unet: ["unet", "diffusion_models", "checkpoints"],
+  vae: ["vae"],
+} as const;
+
+let cachedComfyModelsRoot: Promise<string | null> | null = null;
 
 export type SupportedComfyWorkflowType = keyof typeof WORKFLOW_REGISTRY;
 
@@ -367,8 +386,122 @@ function collectModelFiles(graph: ComfyGraph): string[] {
   return [...files];
 }
 
+function collectWorkflowModelReferences(graph: ComfyGraph): WorkflowModelReference[] {
+  const references = new Map<string, WorkflowModelReference>();
+
+  for (const node of graph.nodes ?? []) {
+    if (!Array.isArray(node.widgets_values)) {
+      continue;
+    }
+
+    if (node.type === "UNETLoader" && typeof node.widgets_values[0] === "string" && node.widgets_values[0]) {
+      references.set(`unet:${node.widgets_values[0]}`, {
+        filename: node.widgets_values[0],
+        searchDirectories: [...MODEL_SEARCH_DIRECTORIES.unet],
+      });
+    }
+
+    if (node.type === "VAELoader" && typeof node.widgets_values[0] === "string" && node.widgets_values[0]) {
+      references.set(`vae:${node.widgets_values[0]}`, {
+        filename: node.widgets_values[0],
+        searchDirectories: [...MODEL_SEARCH_DIRECTORIES.vae],
+      });
+    }
+
+    if (node.type === "DualCLIPLoader") {
+      for (const index of [0, 1]) {
+        const value = node.widgets_values[index];
+        if (typeof value === "string" && value) {
+          references.set(`clip:${value}`, {
+            filename: value,
+            searchDirectories: [...MODEL_SEARCH_DIRECTORIES.clip],
+          });
+        }
+      }
+    }
+  }
+
+  return [...references.values()];
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveComfyModelsRoot(explicitModelsRoot?: string | null): Promise<string | null> {
+  if (typeof explicitModelsRoot !== "undefined") {
+    return explicitModelsRoot;
+  }
+
+  if (!cachedComfyModelsRoot) {
+    cachedComfyModelsRoot = (async () => {
+      const configuredModelsDir = process.env.CREATION_STATION_COMFYUI_MODELS_DIR ?? process.env.COMFYUI_MODELS_DIR;
+      if (configuredModelsDir && await pathExists(configuredModelsDir)) {
+        return configuredModelsDir;
+      }
+
+      const configuredRoot = process.env.CREATION_STATION_COMFYUI_ROOT ?? process.env.COMFYUI_ROOT;
+      if (configuredRoot) {
+        const modelsDir = path.join(configuredRoot, "models");
+        if (await pathExists(modelsDir)) {
+          return modelsDir;
+        }
+      }
+
+      const home = homedir();
+      const candidates = [
+        path.join(home, "Documents", "ComfyUI", "models"),
+        path.join(home, "ComfyUI", "models"),
+        path.join(home, "Downloads", "ComfyUI_windows_portable", "ComfyUI", "models"),
+        path.join("C:", "ComfyUI", "models"),
+      ];
+
+      for (const candidate of candidates) {
+        if (await pathExists(candidate)) {
+          return candidate;
+        }
+      }
+
+      return null;
+    })();
+  }
+
+  return cachedComfyModelsRoot;
+}
+
+async function findMissingModelFiles(
+  references: WorkflowModelReference[],
+  modelsRoot: string,
+): Promise<string[]> {
+  const missingFiles: string[] = [];
+
+  for (const reference of references) {
+    let found = false;
+
+    for (const relativeDirectory of reference.searchDirectories) {
+      const candidatePath = path.join(modelsRoot, relativeDirectory, reference.filename);
+      if (await pathExists(candidatePath)) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      missingFiles.push(reference.filename);
+    }
+  }
+
+  return missingFiles;
+}
+
 export async function validateComfyWorkflow(
   workflowType: SupportedComfyWorkflowType,
+  options: ComfyWorkflowValidationOptions = {},
 ): Promise<ComfyWorkflowValidationResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -381,6 +514,7 @@ export async function validateComfyWorkflow(
     const saveNode = findNode(graph, entry.saveImageNodeId);
     const widthHeightNode = findNode(graph, entry.widthHeightNodeId);
     const modelFiles = collectModelFiles(graph);
+    const modelReferences = collectWorkflowModelReferences(graph);
 
     nodeMapping.positivePromptNodeId = entry.positivePromptNodeId;
     nodeMapping.negativePromptNodeId = entry.negativePromptNodeId;
@@ -427,6 +561,23 @@ export async function validateComfyWorkflow(
     const clipFiles = modelFiles.filter((file) => file.endsWith(".safetensors") && (file.toLowerCase().includes("clip") || file.toLowerCase().includes("t5")));
     if (clipFiles.length < 2) {
       errors.push("Missing CLIP filenames in workflow.");
+    }
+
+    const shouldVerifyModelFiles = options.verifyModelFiles ?? entry.modelRole === "production";
+
+    if (shouldVerifyModelFiles) {
+      const modelsRoot = await resolveComfyModelsRoot(options.modelsRoot);
+
+      if (modelsRoot) {
+        const missingModelFiles = await findMissingModelFiles(modelReferences, modelsRoot);
+        for (const missingFile of missingModelFiles) {
+          errors.push(`Missing model file: ${missingFile}`);
+        }
+      } else {
+        warnings.push(
+          "Comfy model root could not be resolved. Set CREATION_STATION_COMFYUI_MODELS_DIR or CREATION_STATION_COMFYUI_ROOT to enable exact model-file validation.",
+        );
+      }
     }
 
     for (const nodeType of entry.requiredNodeTypes) {

@@ -46,13 +46,18 @@ export async function POST(_request: Request, context: RouteContext) {
     await client.checkAvailability();
 
     const previous = await readComfyWorkflowState(typedWorkflowType);
-    const nextStatus = previous.status === "Validated" ? "Validated" : "Available";
+    const entry = getComfyWorkflowEntry(typedWorkflowType);
+    const nextStatus = entry.modelRole === "concept"
+      ? "Validated"
+      : previous.status === "Validated"
+      ? "Validated"
+      : "Available";
     const state = await writeComfyWorkflowState({
       available: true,
       errors: validation.errors,
       modelFiles: validation.modelFiles,
       nodeMapping: validation.nodeMapping,
-      selectable: nextStatus === "Validated",
+      selectable: entry.modelRole === "concept" || nextStatus === "Validated",
       status: nextStatus,
       valid: true,
       warnings: validation.warnings,

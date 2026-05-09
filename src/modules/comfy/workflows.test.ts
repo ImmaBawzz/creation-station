@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 
 import {
   readComfyWorkflowState,
@@ -8,7 +9,7 @@ import {
 
 describe("comfy workflows", () => {
   it("validates the fast concept workflow graph", async () => {
-    const result = await validateComfyWorkflow("flux-fast-concept");
+    const result = await validateComfyWorkflow("flux-fast-concept", { verifyModelFiles: false });
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
@@ -17,12 +18,24 @@ describe("comfy workflows", () => {
   });
 
   it("validates the cinematic workflow graph", async () => {
-    const result = await validateComfyWorkflow("flux-dev-cinematic");
+    const result = await validateComfyWorkflow("flux-dev-cinematic", { verifyModelFiles: false });
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
     expect(result.nodeMapping.saveImageNodeId).toBe("10");
     expect(result.modelFiles).toContain("flux1-dev.safetensors");
+  });
+
+  it("reports the exact missing model filenames when the local model files are unavailable", async () => {
+    const result = await validateComfyWorkflow("flux-dev-cinematic", {
+      modelsRoot: path.join(process.cwd(), ".missing-comfy-models"),
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain("Missing model file: flux1-dev.safetensors");
+    expect(result.errors).toContain("Missing model file: clip_l.safetensors");
+    expect(result.errors).toContain("Missing model file: t5xxl_fp16.safetensors");
+    expect(result.errors).toContain("Missing model file: ae.safetensors");
   });
 
   it("persists workflow state for later UI reads", async () => {
