@@ -25,6 +25,35 @@ function createLine(index: number, text: string, words: VisualEngineLyricsWord[]
   };
 }
 
+function scoreCandidateWindow(sourceTokens: string[], candidateWords: VisualEngineLyricsWord[]): number {
+  const candidateTokens = candidateWords.map((word) => normalizeToken(word.text)).filter(Boolean);
+
+  if (candidateTokens.length === 0) {
+    return 0;
+  }
+
+  let sequentialMatches = 0;
+  let candidateIndex = 0;
+
+  for (const token of sourceTokens) {
+    while (candidateIndex < candidateTokens.length && candidateTokens[candidateIndex] !== token) {
+      candidateIndex += 1;
+    }
+
+    if (candidateIndex < candidateTokens.length) {
+      sequentialMatches += 1;
+      candidateIndex += 1;
+    }
+  }
+
+  const sharedTokenCount = candidateTokens.filter((token) => sourceTokens.includes(token)).length;
+  const precision = sharedTokenCount / candidateTokens.length;
+  const recall = sharedTokenCount / sourceTokens.length;
+  const sequentialScore = sequentialMatches / sourceTokens.length;
+
+  return (precision * 0.35) + (recall * 0.35) + (sequentialScore * 0.3);
+}
+
 function groupWithSourceLyrics(words: VisualEngineLyricsWord[], sourceLyricsText: string): VisualEngineLyricsLine[] {
   const sourceLines = sourceLyricsText
     .split(/\r?\n/)
@@ -36,34 +65,50 @@ function groupWithSourceLyrics(words: VisualEngineLyricsWord[], sourceLyricsText
   }
 
   const lines: VisualEngineLyricsLine[] = [];
-  let cursor = 0;
+  let searchCursor = 0;
 
   sourceLines.forEach((sourceLine, index) => {
-    if (cursor >= words.length) {
+    const sourceTokens = tokenize(sourceLine);
+
+    if (sourceTokens.length === 0 || searchCursor >= words.length) {
       return;
     }
 
-    const desiredWordCount = Math.max(tokenize(sourceLine).length, 1);
-    const remainingWords = words.length - cursor;
-    const remainingLines = sourceLines.length - index;
-    const assignedWordCount = index === sourceLines.length - 1
-      ? remainingWords
-      : Math.min(desiredWordCount, Math.max(1, remainingWords - (remainingLines - 1)));
-    const lineWords = words.slice(cursor, cursor + assignedWordCount);
+    let bestStart = searchCursor;
+    let bestEnd = Math.min(words.length, searchCursor + sourceTokens.length);
+    let bestScore = -1;
+    const minWindowSize = Math.max(1, sourceTokens.length - 2);
+    const maxWindowSize = Math.min(words.length - searchCursor, sourceTokens.length + 3);
+    const maxStartIndex = Math.min(words.length - 1, searchCursor + 18);
 
-    if (lineWords.length === 0) {
+    for (let startIndex = searchCursor; startIndex <= maxStartIndex; startIndex += 1) {
+      for (let windowSize = minWindowSize; windowSize <= maxWindowSize; windowSize += 1) {
+        const endIndex = startIndex + windowSize;
+
+        if (endIndex > words.length) {
+          break;
+        }
+
+        const candidateWords = words.slice(startIndex, endIndex);
+        const score = scoreCandidateWindow(sourceTokens, candidateWords);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestStart = startIndex;
+          bestEnd = endIndex;
+        }
+      }
+    }
+
+    const groupedWords = words.slice(bestStart, bestEnd);
+
+    if (groupedWords.length === 0) {
       return;
     }
 
-    lines.push(createLine(lines.length + 1, sourceLine, lineWords));
-    cursor += assignedWordCount;
+    lines.push(createLine(index + 1, sourceLine, groupedWords));
+    searchCursor = Math.max(bestEnd, searchCursor + 1);
   });
-
-  if (cursor < words.length) {
-    const trailingWords = words.slice(cursor);
-    const trailingText = trailingWords.map((word) => word.text).join(" ");
-    lines.push(createLine(lines.length + 1, trailingText, trailingWords));
-  }
 
   return lines;
 }

@@ -324,6 +324,7 @@ export async function renderProject(projectId: string): Promise<VisualEngineRend
   const intermediateVisualPath = path.join(folders.renders, `${projectId}.visual.mp4`);
   const finalOutputPath = path.join(folders.renders, "final.mp4");
   const generatedAssPath = path.join(folders.lyrics, "lyrics.ass");
+  const generatedSrtPath = path.join(folders.lyrics, "lyrics.srt");
 
   await renderLoopedVisual({
     audioDuration: duration,
@@ -334,12 +335,16 @@ export async function renderProject(projectId: string): Promise<VisualEngineRend
 
   let subtitlePath: string | null = null;
 
-  if (await fileExistsAbsolute(generatedAssPath)) {
+  if (await fileExistsAbsolute(generatedSrtPath)) {
+    subtitlePath = generatedSrtPath;
+  } else if (await fileExistsAbsolute(generatedAssPath)) {
     subtitlePath = generatedAssPath;
   } else if (resolvedMedia.lyricsFile && isWhisperConfigured()) {
     await generateLyricsArtifacts(projectId);
 
-    if (await fileExistsAbsolute(generatedAssPath)) {
+    if (await fileExistsAbsolute(generatedSrtPath)) {
+      subtitlePath = generatedSrtPath;
+    } else if (await fileExistsAbsolute(generatedAssPath)) {
       subtitlePath = generatedAssPath;
     }
   }
