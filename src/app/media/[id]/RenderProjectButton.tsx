@@ -278,6 +278,74 @@ type SceneMotionPlanResponse = {
   success?: boolean;
 };
 
+type TimelineSectionKind = "slow" | "build" | "drop" | "emotional-peak" | "cooldown";
+
+type TimelineTransition = {
+  cutTiming: number;
+  fadeTiming: number;
+  fromSceneId: string;
+  overlapTiming: number;
+  toSceneId: string;
+  transitionStyle: string;
+};
+
+type TimelinePacingEntry = {
+  duration: number;
+  endTime: number;
+  pacingScore: number;
+  sceneId: string;
+  sectionKind: TimelineSectionKind;
+  startTime: number;
+};
+
+type TimelineClimaxEntry = {
+  reason: string;
+  sceneId: string;
+  strength: number;
+};
+
+type TimelineSceneSequenceItem = {
+  adjustedDuration: number;
+  cameraMovement: string;
+  climaxAssigned: boolean;
+  endTime: number;
+  motionIntensity: string;
+  originalDuration: number;
+  pacingScore: number;
+  sceneId: string;
+  sectionKind: TimelineSectionKind;
+  sourceImage: string;
+  startTime: number;
+  transitionStyle: string;
+};
+
+type TimelinePlan = {
+  climaxMap: TimelineClimaxEntry[];
+  createdAt: string;
+  pacingMap: TimelinePacingEntry[];
+  projectId: string;
+  runtimeBalanceStrategy: "compressed-lower-priority" | "extended-strongest-scenes" | "balanced";
+  sceneSequencing: TimelineSceneSequenceItem[];
+  sourceManifests: {
+    lyricsTiming: string;
+    sceneMotionPlan: string;
+    scenePlan: string;
+    sceneVideos: string;
+    timelinePlan: string;
+  };
+  totalRuntime: number;
+  transitions: TimelineTransition[];
+  updatedAt: string;
+};
+
+type TimelinePlanResponse = {
+  details?: string[];
+  error?: string;
+  projectId?: string;
+  success?: boolean;
+  timelinePlan?: TimelinePlan;
+};
+
 function formatSceneTime(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
@@ -307,9 +375,12 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [lyricsMessage, setLyricsMessage] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [isGeneratingMotionPlan, setIsGeneratingMotionPlan] = useState(false);
+  const [isGeneratingTimelinePlan, setIsGeneratingTimelinePlan] = useState(false);
   const [isSubmittingSceneVideos, setIsSubmittingSceneVideos] = useState(false);
   const [motionPlan, setMotionPlan] = useState<SceneMotionPlan | null>(null);
   const [motionPlanMessage, setMotionPlanMessage] = useState<string>("");
+  const [timelinePlan, setTimelinePlan] = useState<TimelinePlan | null>(null);
+  const [timelinePlanMessage, setTimelinePlanMessage] = useState<string>("");
   const [sceneExecutionAction, setSceneExecutionAction] = useState<string | null>(null);
   const [sceneExecutionMessage, setSceneExecutionMessage] = useState<string>("");
   const [sceneExecutionState, setSceneExecutionState] = useState<SceneExecutionState | null>(null);
@@ -331,6 +402,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
   const approvedScenes = scenePlan.filter((scene) => approvedSceneIds.includes(scene.id));
   const motionPlanBySceneId = new Map(motionPlan?.scenes.map((scene) => [scene.sceneId, scene]) ?? []);
+  const timelineSequenceBySceneId = new Map(timelinePlan?.sceneSequencing.map((scene) => [scene.sceneId, scene]) ?? []);
   const sceneExecutionAssetsBySceneId = new Map(sceneExecutionState?.assets.map((asset) => [asset.sceneId, asset]) ?? []);
   const sceneVideoJobsBySceneId = new Map(sceneVideoState?.jobs.map((job) => [job.sceneId, job]) ?? []);
   const selectedWorkflowNote = selectedWorkflow.errors?.[0]
@@ -371,6 +443,33 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       }
     }
 
+    async function loadTimelinePlan() {
+      try {
+        const response = await fetch(`/api/timeline-director/generate?projectId=${encodeURIComponent(projectId)}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setTimelinePlan(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as TimelinePlanResponse;
+
+        if (cancelled || !payload.timelinePlan) {
+          return;
+        }
+
+        setTimelinePlan(payload.timelinePlan);
+      } catch {
+        if (!cancelled) {
+          setTimelinePlan(null);
+        }
+      }
+    }
+
     async function loadScenePlan() {
       try {
         const response = await fetch(`/api/scene-planner/generate?projectId=${encodeURIComponent(projectId)}`, {
@@ -396,6 +495,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
     void loadScenePlan();
     void loadMotionPlan();
+    void loadTimelinePlan();
 
     return () => {
       cancelled = true;
@@ -958,6 +1058,35 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
   }
 
+  async function handleGenerateTimelinePlan() {
+    setIsGeneratingTimelinePlan(true);
+    setTimelinePlanMessage("Generating full-song timeline plan...");
+
+    try {
+      const response = await fetch("/api/timeline-director/generate", {
+        body: JSON.stringify({ projectId }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as TimelinePlanResponse;
+
+      if (!response.ok || !payload.timelinePlan) {
+        const detailText = payload.details && payload.details.length > 0
+          ? ` ${payload.details.join("; ")}`
+          : "";
+        setTimelinePlanMessage(`${payload.error ?? "Timeline plan generation failed."}${detailText}`);
+        return;
+      }
+
+      setTimelinePlan(payload.timelinePlan);
+      setTimelinePlanMessage(`Timeline plan ready: ${payload.timelinePlan.sceneSequencing.length} scenes across ${payload.timelinePlan.totalRuntime.toFixed(2)}s.`);
+    } catch (error) {
+      setTimelinePlanMessage(error instanceof Error ? error.message : "Timeline plan generation failed.");
+    } finally {
+      setIsGeneratingTimelinePlan(false);
+    }
+  }
+
   async function handleRender() {
     setIsRendering(true);
     setMessage("");
@@ -1119,6 +1248,14 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           {isGeneratingMotionPlan ? "Generating Motion Plan..." : "Generate Motion Plan"}
         </button>
         <button
+          className="rounded-lg border border-cyan-700/70 bg-cyan-950/40 px-3 py-2 text-sm text-cyan-100 hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isGeneratingTimelinePlan || approvedScenes.length === 0}
+          onClick={() => void handleGenerateTimelinePlan()}
+          type="button"
+        >
+          {isGeneratingTimelinePlan ? "Generating Timeline Plan..." : "Generate Timeline Plan"}
+        </button>
+        <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "running"}
           onClick={() => void handleSceneExecutionAction("pause")}
@@ -1175,6 +1312,7 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       <p className="text-sm text-amber-300">Mock video planning only. Real video providers not enabled.</p>
       {sceneVideoMessage ? <p className="text-sm text-zinc-400">{sceneVideoMessage}</p> : null}
       {motionPlanMessage ? <p className="text-sm text-zinc-400">{motionPlanMessage}</p> : null}
+      {timelinePlanMessage ? <p className="text-sm text-zinc-400">{timelinePlanMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}
       {scenePlan.length > 0 ? (
         <div className="mt-2 w-full space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
@@ -1188,8 +1326,16 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
               {sceneExecutionState ? <p>{sceneExecutionState.progress.processed}/{sceneExecutionState.progress.total} scenes complete</p> : null}
               {sceneVideoState ? <p>{sceneVideoState.progress.processed}/{sceneVideoState.progress.total} scene videos processed</p> : null}
               {motionPlan ? <p>{motionPlan.scenes.length} motion instructions generated</p> : null}
+              {timelinePlan ? <p>{timelinePlan.sceneSequencing.length} timeline scenes across {timelinePlan.totalRuntime.toFixed(2)}s</p> : null}
             </div>
           </div>
+          {timelinePlan ? (
+            <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-3 text-xs text-cyan-100">
+              <p className="font-medium">Timeline plan manifest: {timelinePlan.sourceManifests.timelinePlan}</p>
+              <p>Runtime strategy: {timelinePlan.runtimeBalanceStrategy} | Total runtime: {timelinePlan.totalRuntime.toFixed(2)}s</p>
+              <p>Climax scenes: {timelinePlan.climaxMap.map((entry) => `${entry.sceneId} (${entry.reason})`).join(", ")}</p>
+            </div>
+          ) : null}
           {motionPlan ? (
             <div className="rounded-xl border border-violet-900/60 bg-violet-950/20 p-3 text-xs text-violet-100">
               <p className="font-medium">Motion plan manifest: {motionPlan.sourceManifests.sceneMotionPlan}</p>
@@ -1242,6 +1388,15 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                         <p>Start frame: {motionPlanBySceneId.get(scene.id)?.startFrameStrategy}</p>
                         <p>End frame: {motionPlanBySceneId.get(scene.id)?.endFrameStrategy}</p>
                         <p>Compatibility: {motionPlanBySceneId.get(scene.id)?.providerCompatibilityTags.join(", ")}</p>
+                      </div>
+                    ) : null}
+                    {timelineSequenceBySceneId.get(scene.id) ? (
+                      <div className="space-y-1 rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3 text-sm text-cyan-100">
+                        <p>Timeline section: {timelineSequenceBySceneId.get(scene.id)?.sectionKind}</p>
+                        <p>Timeline window: {timelineSequenceBySceneId.get(scene.id)?.startTime.toFixed(2)}s - {timelineSequenceBySceneId.get(scene.id)?.endTime.toFixed(2)}s</p>
+                        <p>Adjusted duration: {timelineSequenceBySceneId.get(scene.id)?.adjustedDuration.toFixed(2)}s</p>
+                        <p>Transition: {timelineSequenceBySceneId.get(scene.id)?.transitionStyle}</p>
+                        <p>Climax assigned: {timelineSequenceBySceneId.get(scene.id)?.climaxAssigned ? "yes" : "no"}</p>
                       </div>
                     ) : null}
                     {sceneVideoJobsBySceneId.get(scene.id) ? (
