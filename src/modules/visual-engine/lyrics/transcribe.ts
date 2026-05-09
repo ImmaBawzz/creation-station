@@ -243,7 +243,7 @@ async function generateLyricsBundle(projectId: string): Promise<GeneratedLyricsB
 
     relativeAlignedJsonPath = relativeProjectPath(alignedJsonPath);
 
-    if (hasAlignedLines && alignment.report.confidenceScore >= 0.45) {
+    if (hasAlignedLines && alignment.report.fallback.shouldPreferAlignedTimestamps) {
       alignedLines = alignment.alignedLines;
       usedAlignedTimestamps = true;
     }

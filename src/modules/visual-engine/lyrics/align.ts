@@ -1,5 +1,12 @@
 import path from "node:path";
 
+import {
+  buildSmartDurationFallbackLines,
+  evaluateFallbackAlignment,
+  type FallbackAlignmentMetrics,
+  type FallbackAlignmentMode,
+  type FallbackAlignmentTrigger,
+} from "@/modules/visual-engine/lyrics/fallbackAlignment";
 import type { VisualEngineLyricsLine, VisualEngineLyricsWord } from "@/modules/visual-engine/types";
 
 const DEFAULT_WORD_DURATION_SECONDS = 0.32;
@@ -42,6 +49,15 @@ type LineTimingReport = {
 export type LyricsAlignmentReport = {
   averageTimingDriftSeconds: number;
   confidenceScore: number;
+  fallback: {
+    anchorDensity: number;
+    matchedSourceCoverage: number;
+    mode: FallbackAlignmentMode;
+    shouldPreferAlignedTimestamps: boolean;
+    transcriptCoverage: number;
+    triggers: FallbackAlignmentTrigger[];
+    usedFallback: boolean;
+  };
   hallucinatedWords: string[];
   lineReports: LineTimingReport[];
   matchedWordCount: number;
@@ -364,6 +380,29 @@ function toLine(
   };
 }
 
+function fallbackLineInput(
+  sourceLine: SourceLine,
+  matches: MatchRecord[],
+  transcriptTokens: TranscriptToken[],
+): {
+  index: number;
+  matchedWords: VisualEngineLyricsWord[];
+  text: string;
+  tokens: string[];
+} {
+  const matchedWords = matches
+    .filter((match) => sourceLine.tokens.some((token) => token.index === match.sourceIndex))
+    .map((match) => transcriptTokens[match.transcriptIndex]?.word)
+    .filter((word): word is VisualEngineLyricsWord => Boolean(word));
+
+  return {
+    index: sourceLine.index,
+    matchedWords,
+    text: sourceLine.text,
+    tokens: sourceLine.tokens.map((token) => token.display),
+  };
+}
+
 export function alignLyricsToSource({
   audioPath,
   sourceLyricsText,
@@ -383,6 +422,15 @@ export function alignLyricsToSource({
       report: {
         averageTimingDriftSeconds: 0,
         confidenceScore: 0,
+        fallback: {
+          anchorDensity: 0,
+          matchedSourceCoverage: 0,
+          mode: "none",
+          shouldPreferAlignedTimestamps: false,
+          transcriptCoverage: sourceTokens.length > 0 ? 0 : 1,
+          triggers: transcriptTokens.length === 0 ? ["sparse_transcript_coverage"] : [],
+          usedFallback: false,
+        },
         hallucinatedWords: [],
         lineReports: [],
         matchedWordCount: 0,
@@ -420,7 +468,20 @@ export function alignLyricsToSource({
     0,
     Math.min(1, (coverageRatio * 0.65) + (exactRatio * 0.2) + (fuzzyRatio * 0.08) - (hallucinationRatio * 0.18)),
   );
-  const alignedLines = sourceLines.map((line) => toLine(line, alignedWords));
+  const fallbackMetrics: FallbackAlignmentMetrics = evaluateFallbackAlignment({
+    confidenceScore,
+    matchedWordCount: matches.length,
+    sourceWordCount: sourceTokens.length,
+    transcriptWordCount: transcriptTokens.length,
+  });
+  const primaryAlignedLines = sourceLines.map((line) => toLine(line, alignedWords));
+  const usedFallback = fallbackMetrics.shouldActivateFallback;
+  const alignedLines = usedFallback
+    ? buildSmartDurationFallbackLines({
+        sourceLines: sourceLines.map((line) => fallbackLineInput(line, matches, transcriptTokens)),
+        transcriptWords,
+      })
+    : primaryAlignedLines;
   const lineReports = sourceLines.map((line) => {
     const matchedCount = line.tokens.filter((token) => matchedSourceIndexes.has(token.index)).length;
     const lineConfidence = line.tokens.length > 0
@@ -446,6 +507,17 @@ export function alignLyricsToSource({
     report: {
       averageTimingDriftSeconds: Number((driftSamples.length > 0 ? median(driftSamples) : 0).toFixed(3)),
       confidenceScore: Number(confidenceScore.toFixed(3)),
+      fallback: {
+        anchorDensity: fallbackMetrics.anchorDensity,
+        matchedSourceCoverage: fallbackMetrics.matchedSourceCoverage,
+        mode: usedFallback ? "smart_duration_interpolation" : "none",
+        shouldPreferAlignedTimestamps: usedFallback
+          ? fallbackMetrics.shouldPreferAlignedTimestamps
+          : confidenceScore >= 0.45,
+        transcriptCoverage: fallbackMetrics.transcriptCoverage,
+        triggers: fallbackMetrics.triggers,
+        usedFallback,
+      },
       hallucinatedWords,
       lineReports,
       matchedWordCount: matches.length,
