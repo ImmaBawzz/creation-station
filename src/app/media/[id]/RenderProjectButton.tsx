@@ -187,6 +187,56 @@ type SceneExecutionResponse = {
   success?: boolean;
 };
 
+type SceneVideoJobStatus = "pending" | "running" | "completed" | "failed";
+type SceneVideoStateStatus = "idle" | "running" | "paused" | "completed" | "failed";
+
+type SceneVideoJob = {
+  cameraDirection: string;
+  completedAt?: string;
+  duration: number;
+  error?: string;
+  id: string;
+  motionPrompt: string;
+  motionType: string;
+  placeholderVideoId?: string;
+  provider: "mock";
+  sceneId: string;
+  sourceImage: string;
+  startedAt?: string;
+  status: SceneVideoJobStatus;
+};
+
+type SceneVideoState = {
+  approvedSceneIds: string[];
+  createdAt: string;
+  jobs: SceneVideoJob[];
+  progress: {
+    completed: number;
+    failed: number;
+    pending: number;
+    processed: number;
+    running: number;
+    total: number;
+  };
+  projectId: string;
+  provider: "mock";
+  sourceManifests: {
+    sceneAssets: string;
+    scenePlan: string;
+    sceneVideos: string;
+  };
+  status: SceneVideoStateStatus;
+  updatedAt: string;
+};
+
+type SceneVideoResponse = {
+  details?: string[];
+  error?: string;
+  projectId?: string;
+  state?: SceneVideoState;
+  success?: boolean;
+};
+
 function formatSceneTime(seconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
@@ -215,9 +265,12 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
   const [isGeneratingConcept, setIsGeneratingConcept] = useState(false);
   const [lyricsMessage, setLyricsMessage] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  const [isSubmittingSceneVideos, setIsSubmittingSceneVideos] = useState(false);
   const [sceneExecutionAction, setSceneExecutionAction] = useState<string | null>(null);
   const [sceneExecutionMessage, setSceneExecutionMessage] = useState<string>("");
   const [sceneExecutionState, setSceneExecutionState] = useState<SceneExecutionState | null>(null);
+  const [sceneVideoMessage, setSceneVideoMessage] = useState<string>("");
+  const [sceneVideoState, setSceneVideoState] = useState<SceneVideoState | null>(null);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isGeneratingScenePlan, setIsGeneratingScenePlan] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
@@ -230,9 +283,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
 
   const isConceptJobActive = conceptStatus !== null && conceptStatus !== "completed" && conceptStatus !== "failed" && conceptStatus !== "timeout";
   const isSceneExecutionActive = sceneExecutionState?.status === "running" || sceneExecutionState?.status === "cancelling";
+  const isSceneVideoActive = sceneVideoState?.status === "running";
   const selectedWorkflow = workflowStatusByType[selectedWorkflowType] ?? DEFAULT_WORKFLOW_STATUS[selectedWorkflowType];
   const approvedScenes = scenePlan.filter((scene) => approvedSceneIds.includes(scene.id));
   const sceneExecutionAssetsBySceneId = new Map(sceneExecutionState?.assets.map((asset) => [asset.sceneId, asset]) ?? []);
+  const sceneVideoJobsBySceneId = new Map(sceneVideoState?.jobs.map((job) => [job.sceneId, job]) ?? []);
   const selectedWorkflowNote = selectedWorkflow.errors?.[0]
     ?? (selectedWorkflow.models?.missing && selectedWorkflow.models.missing.length > 0
       ? `Missing model files: ${selectedWorkflow.models.missing.join(", ")}`
@@ -316,6 +371,53 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
 
     void loadSceneExecutionState();
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function loadSceneVideoState() {
+      try {
+        const response = await fetch(`/api/video-generation/projects/${projectId}/status`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setSceneVideoState(null);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as SceneVideoResponse;
+
+        if (cancelled || !payload.state) {
+          return;
+        }
+
+        setSceneVideoState(payload.state);
+
+        if (payload.state.status === "running") {
+          timer = setTimeout(() => {
+            void loadSceneVideoState();
+          }, 1_500);
+        }
+      } catch {
+        if (!cancelled) {
+          setSceneVideoState(null);
+        }
+      }
+    }
+
+    void loadSceneVideoState();
 
     return () => {
       cancelled = true;
@@ -716,6 +818,44 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
     }
   }
 
+  async function handleSceneVideoRun() {
+    setIsSubmittingSceneVideos(true);
+    setSceneVideoMessage(
+      sceneVideoState?.status === "paused"
+        ? "Resuming mock scene video queue..."
+        : "Planning mock scene video queue...",
+    );
+
+    try {
+      const response = await fetch(`/api/video-generation/projects/${projectId}/run`, {
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as SceneVideoResponse;
+
+      if (!response.ok || !payload.state) {
+        const detailText = payload.details && payload.details.length > 0
+          ? ` ${payload.details.join("; ")}`
+          : "";
+        setSceneVideoMessage(`${payload.error ?? "Scene video generation failed."}${detailText}`);
+        return;
+      }
+
+      setSceneVideoState(payload.state);
+      setSceneVideoMessage(
+        payload.state.status === "completed"
+          ? `Mock scene video plan complete: ${payload.state.progress.completed}/${payload.state.progress.total} finished.`
+          : payload.state.status === "paused"
+          ? "Mock scene video queue paused and ready to resume."
+          : `Mock scene video queue running: ${payload.state.progress.processed}/${payload.state.progress.total} processed.`,
+      );
+    } catch (error) {
+      setSceneVideoMessage(error instanceof Error ? error.message : "Scene video generation failed.");
+    } finally {
+      setIsSubmittingSceneVideos(false);
+    }
+  }
+
   async function handleRender() {
     setIsRendering(true);
     setMessage("");
@@ -855,6 +995,20 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
           {sceneExecutionAction === "start" ? "Starting Batch..." : `Generate Approved Scenes (${approvedScenes.length})`}
         </button>
         <button
+          className="rounded-lg border border-sky-700/70 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSubmittingSceneVideos || approvedScenes.length === 0 || isSceneVideoActive}
+          onClick={() => void handleSceneVideoRun()}
+          type="button"
+        >
+          {isSubmittingSceneVideos
+            ? "Preparing Scene Videos..."
+            : sceneVideoState?.status === "paused"
+            ? "Resume Scene Videos"
+            : isSceneVideoActive
+            ? "Generating Scene Videos..."
+            : "Generate Scene Videos"}
+        </button>
+        <button
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={sceneExecutionAction !== null || sceneExecutionState?.status !== "running"}
           onClick={() => void handleSceneExecutionAction("pause")}
@@ -908,6 +1062,8 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
       {lyricsMessage ? <p className="text-sm text-zinc-400">{lyricsMessage}</p> : null}
       {scenePlanMessage ? <p className="text-sm text-zinc-400">{scenePlanMessage}</p> : null}
       {sceneExecutionMessage ? <p className="text-sm text-zinc-400">{sceneExecutionMessage}</p> : null}
+      <p className="text-sm text-amber-300">Mock video planning only. Real video providers not enabled.</p>
+      {sceneVideoMessage ? <p className="text-sm text-zinc-400">{sceneVideoMessage}</p> : null}
       {message ? <p className="text-sm text-zinc-400">{message}</p> : null}
       {scenePlan.length > 0 ? (
         <div className="mt-2 w-full space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
@@ -919,8 +1075,16 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
             <div className="text-right text-xs text-zinc-500">
               <p>{approvedScenes.length} of {scenePlan.length} approved</p>
               {sceneExecutionState ? <p>{sceneExecutionState.progress.processed}/{sceneExecutionState.progress.total} scenes complete</p> : null}
+              {sceneVideoState ? <p>{sceneVideoState.progress.processed}/{sceneVideoState.progress.total} scene videos processed</p> : null}
             </div>
           </div>
+          {sceneVideoState ? (
+            <div className="rounded-xl border border-sky-900/60 bg-sky-950/20 p-3 text-xs text-sky-100">
+              <p className="font-medium">Scene video manifest: {sceneVideoState.sourceManifests.sceneVideos}</p>
+              <p>Provider: {sceneVideoState.provider} | Status: {sceneVideoState.status}</p>
+              <p>Pending {sceneVideoState.progress.pending} | Running {sceneVideoState.progress.running} | Completed {sceneVideoState.progress.completed} | Failed {sceneVideoState.progress.failed}</p>
+            </div>
+          ) : null}
           <div className="space-y-3">
             {scenePlan.map((scene) => (
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3" key={scene.id}>
@@ -930,6 +1094,11 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                       {sceneExecutionAssetsBySceneId.get(scene.id) ? (
                         <span className={`rounded-full border px-2 py-1 ${getWorkflowBadgeClass(sceneExecutionAssetsBySceneId.get(scene.id)?.status === "completed" ? "valid" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "generating" ? "Needs validation" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "failed" ? "Comfy offline" : sceneExecutionAssetsBySceneId.get(scene.id)?.status === "skipped" ? "invalid" : "Needs validation")}`}>
                           {sceneExecutionAssetsBySceneId.get(scene.id)?.status}
+                        </span>
+                      ) : null}
+                      {sceneVideoJobsBySceneId.get(scene.id) ? (
+                        <span className={`rounded-full border px-2 py-1 ${getWorkflowBadgeClass(sceneVideoJobsBySceneId.get(scene.id)?.status === "completed" ? "valid" : sceneVideoJobsBySceneId.get(scene.id)?.status === "running" ? "Needs validation" : sceneVideoJobsBySceneId.get(scene.id)?.status === "failed" ? "Comfy offline" : "Needs validation")}`}>
+                          video {sceneVideoJobsBySceneId.get(scene.id)?.status}
                         </span>
                       ) : null}
                       <span className="rounded-full border border-zinc-700 px-2 py-1 text-zinc-200">{scene.id}</span>
@@ -943,7 +1112,14 @@ export function RenderProjectButton({ projectId }: { projectId: string }) {
                     <p className="text-sm text-zinc-300">{scene.visualDescription}</p>
                     <p className="text-sm text-zinc-400">{scene.cameraDirection}</p>
                     {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath ? <p className="text-sm text-emerald-300">Asset: {sceneExecutionAssetsBySceneId.get(scene.id)?.imagePath}</p> : null}
+                    {sceneVideoJobsBySceneId.get(scene.id) ? (
+                      <p className="text-sm text-sky-300">
+                        Video plan: {sceneVideoJobsBySceneId.get(scene.id)?.motionType} for {sceneVideoJobsBySceneId.get(scene.id)?.duration.toFixed(2)}s from {sceneVideoJobsBySceneId.get(scene.id)?.sourceImage}
+                      </p>
+                    ) : null}
+                    {sceneVideoJobsBySceneId.get(scene.id)?.placeholderVideoId ? <p className="text-sm text-sky-300">Placeholder record: {sceneVideoJobsBySceneId.get(scene.id)?.placeholderVideoId}</p> : null}
                     {sceneExecutionAssetsBySceneId.get(scene.id)?.error ? <p className="text-sm text-amber-300">{sceneExecutionAssetsBySceneId.get(scene.id)?.error}</p> : null}
+                    {sceneVideoJobsBySceneId.get(scene.id)?.error ? <p className="text-sm text-amber-300">{sceneVideoJobsBySceneId.get(scene.id)?.error}</p> : null}
                   </div>
                   <div className="flex min-w-44 flex-col items-stretch gap-2">
                     <label className="flex items-center gap-2 text-sm text-zinc-300">
