@@ -1,4 +1,4 @@
-export type SceneVideoProvider = "mock";
+export type SceneVideoProvider = "mock" | "comfy" | "wan" | "kling" | "runway";
 
 export type SceneVideoJobStatus = "pending" | "running" | "completed" | "failed";
 export type SceneVideoStateStatus = "idle" | "running" | "paused" | "completed" | "failed";

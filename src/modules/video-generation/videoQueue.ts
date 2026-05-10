@@ -1,4 +1,4 @@
-import { runMockSceneVideoJob } from "@/modules/video-generation/mockProvider";
+import { executeProviderJob } from "@/modules/provider-runtime";
 import {
   readSceneVideoState,
   sceneVideoStateHasPendingJobs,
@@ -72,7 +72,16 @@ async function runSceneVideoQueue(projectId: string): Promise<void> {
     }
 
     try {
-      const result = await runMockSceneVideoJob(projectId, startedJob);
+      const result = await executeProviderJob(projectId, {
+        id: startedJob.id,
+        sceneId: startedJob.sceneId,
+        provider: startedJob.provider,
+        prompt: startedJob.motionPrompt,
+        sourceImage: startedJob.sourceImage,
+        duration: startedJob.duration,
+        motionType: startedJob.motionType,
+        startedAt: startedJob.startedAt,
+      });
       const latestState = await readSceneVideoState(projectId);
 
       if (!latestState) {
