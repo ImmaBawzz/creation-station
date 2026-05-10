@@ -1,6 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
+import { runComfyCertification } from "./comfyCertification";
 import { runCertification } from "./certify";
 import type { ProviderType } from "../types";
 import { writeFile } from "node:fs/promises";
@@ -22,21 +23,33 @@ async function main() {
   console.log(`  Starting Certification Pipeline: [${providerId.toUpperCase()}]`);
   console.log(`=================================================\n`);
 
-  const report = await runCertification(providerId);
+  const report = providerId === "comfy"
+    ? await runComfyCertification()
+    : await runCertification(providerId);
+  const status = "overallStatus" in report ? report.overallStatus : report.finalStatus;
+  const durationSeconds = "totalDurationMs" in report ? (report.totalDurationMs / 1000).toFixed(2) : "0.00";
 
   console.log(`\n=================================================`);
-  console.log(`  Certification Result: ${report.overallStatus.toUpperCase()}`);
-  console.log(`  Duration: ${(report.totalDurationMs / 1000).toFixed(2)}s`);
+  console.log(`  Certification Result: ${status.toUpperCase()}`);
+  console.log(`  Duration: ${durationSeconds}s`);
   console.log(`=================================================\n`);
 
-  for (const step of report.steps) {
-    const icon = step.status === "passed" ? "PASS" : step.status === "failed" ? "FAIL" : "SKIP";
-    console.log(`${icon} [${step.status.toUpperCase()}] ${step.name} (${(step.durationMs / 1000).toFixed(2)}s)`);
-    if (step.error) {
-      console.log(`    Error: ${step.error}`);
+  const rows = "steps" in report ? report.steps : report.phases.map((phase) => ({
+    details: phase.details,
+    durationMs: 0,
+    error: phase.error,
+    name: phase.name,
+    status: phase.status,
+  }));
+
+  for (const row of rows) {
+    const icon = row.status === "passed" ? "PASS" : row.status === "failed" ? "FAIL" : "SKIP";
+    console.log(`${icon} [${row.status.toUpperCase()}] ${row.name} (${(row.durationMs / 1000).toFixed(2)}s)`);
+    if (row.error) {
+      console.log(`    Error: ${row.error}`);
     }
-    if (step.details) {
-      console.log("    Details:", step.details);
+    if (row.details) {
+      console.log("    Details:", row.details);
     }
   }
 
@@ -46,7 +59,9 @@ async function main() {
   await writeFile(outFile, JSON.stringify(report, null, 2), "utf8");
   console.log(`\nSaved detailed report to: docs/certification-${providerId}.json\n`);
 
-  if (report.overallStatus === "failed") {
+  const failed = status === "failed";
+
+  if (failed) {
     process.exit(1);
   }
 }

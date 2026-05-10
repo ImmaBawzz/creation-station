@@ -54,20 +54,11 @@ export function mapCanonicalPayloadToComfy(job: ProviderJobRequest): ProviderPay
 
   const primaryImage = findPrimaryImage(job);
 
-  if (!primaryImage) {
-    return {
-      ok: false,
-      errorCode: "provider_missing_reference_asset",
-      message: "provider_missing_reference_asset: Comfy video workflows require a primary reference image.",
-      warnings,
-    };
-  }
-
   return {
     ok: true,
     payload: {
       height: job.resolution?.height,
-      imageInputs: [primaryImage],
+      imageInputs: primaryImage ? [primaryImage] : [],
       negativePrompt: job.negativePrompt ?? "",
       positivePrompt: job.prompt,
       samplerSeed: job.seed,

@@ -12,6 +12,7 @@
     "test:smoke": "playwright test tests/smoke/core-routes.spec.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "certify:provider": "npx tsx src/modules/provider-runtime/provider-certification/cli.ts",
     "stress:provider-runtime": "vitest run src/modules/provider-runtime/stress.test.ts"
   },
   "dependencies": {
