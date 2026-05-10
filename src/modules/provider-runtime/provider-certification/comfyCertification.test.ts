@@ -11,13 +11,51 @@ const envSnapshot = { ...process.env };
 vi.mock("@/modules/comfy/workflows", () => ({
   listSupportedComfyWorkflowTypes: () => ["flux-fast-concept"],
   prepareComfyWorkflowPrompt: vi.fn(async () => ({
+    entry: {
+      filenamePrefix: "[projectId]-concept",
+      label: "Fast Concept",
+      modelRole: "concept",
+      negativePromptNodeId: "36",
+      positivePromptNodeId: "4",
+      requiredNodeTypes: ["SaveImage"],
+      samplerNodeId: "7",
+      saveImageNodeId: "9",
+      smokeHeight: 512,
+      smokeSteps: 6,
+      smokeWidth: 512,
+      widthHeightNodeId: "6",
+      workflowPath: "src/modules/comfy/workflows/flux-fast-concept.json",
+    },
     outputPrefix: "dry-run-output",
-    promptPayload: { "1": { class_type: "TestNode", inputs: {} } },
+    promptPayload: {
+      "4": {
+        class_type: "CLIPTextEncodeFlux",
+        inputs: { clip_l: "simple cinematic test frame, soft light, abstract geometric object, no text" },
+      },
+      "6": { class_type: "EmptySD3LatentImage", inputs: { height: 512, width: 512 } },
+      "7": { class_type: "KSampler", inputs: { seed: 12345, steps: 6 } },
+      "9": { class_type: "SaveImage", inputs: { filename_prefix: "dry-run-output" } },
+    },
   })),
   validateComfyWorkflow: vi.fn(async () => ({
     errors: workflowErrors,
+    modelFiles: ["flux1-schnell.safetensors", "clip_l.safetensors", "t5xxl_fp16.safetensors", "ae.safetensors"],
     modelValidationStatus: workflowValid ? "valid" : "invalid",
+    models: {
+      missing: workflowValid ? [] : workflowErrors,
+      required: ["flux1-schnell.safetensors", "clip_l.safetensors", "t5xxl_fp16.safetensors", "ae.safetensors"],
+      resolved: [],
+      warnings: [],
+    },
+    nodeMapping: {
+      negativePromptNodeId: "36",
+      positivePromptNodeId: "4",
+      saveImageNodeId: "9",
+      widthHeightNodeId: "6",
+    },
     valid: workflowValid,
+    warnings: [],
+    workflowType: "flux-fast-concept",
   })),
 }));
 

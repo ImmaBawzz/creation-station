@@ -10,6 +10,20 @@ import { getProviderAdapter } from "@/modules/provider-runtime/providerRegistry"
 import { inspectProviderPayload } from "@/modules/provider-runtime/readiness";
 import type { ProviderJobRequest } from "@/modules/provider-runtime/types";
 import { bootstrapComfy, type ComfyBootstrapResult } from "./comfyBootstrap";
+import {
+  classifyTimeoutPhase,
+  collectOutputDiagnostics,
+  collectOutputFilenames,
+  collectWorkflowIdentityDiagnostics,
+  createInitialComfyDiagnostics,
+  fetchComfyJson,
+  getHistoryRecord,
+  historyHasExecutionError,
+  queueContainsPromptId,
+  resolveCertificationTimeouts,
+  writeComfyCertificationDiagnostics,
+  type ComfyCertificationDiagnostics,
+} from "./comfyDiagnostics";
 
 export type ComfyCertificationStatus =
   | "certified"
@@ -31,6 +45,7 @@ export type ComfyCertificationReport = {
   bootstrapResult?: ComfyBootstrapResult;
   certified: boolean;
   comfyUrl: string;
+  diagnostics?: Pick<ComfyCertificationDiagnostics, "promptId" | "timeoutPhase" | "workflowIdentity">;
   executionMode: string;
   finalStatus: ComfyCertificationStatus;
   generatedAt: string;
@@ -113,6 +128,129 @@ function isMissingModelError(errors: string[]): string | undefined {
   return errors.find((error) => error.toLowerCase().includes("missing model file"));
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getWorkflowValidationError(errors: string[]): string {
+  if (errors.some((error) => error.toLowerCase().includes("missing saveimage"))) {
+    return "comfy_output_node_missing";
+  }
+
+  if (errors.some((error) => error.toLowerCase().includes("positive prompt"))) {
+    return "comfy_prompt_injection_failed";
+  }
+
+  return "comfy_workflow_missing";
+}
+
+function queueState(queue: unknown, promptId: string): "absent" | "pending" | "running" | "unknown" {
+  if (queueContainsPromptId(queue, promptId, "queue_pending")) {
+    return "pending";
+  }
+
+  if (queueContainsPromptId(queue, promptId, "queue_running")) {
+    return "running";
+  }
+
+  return queue ? "absent" : "unknown";
+}
+
+async function waitForComfyCompletionWithDiagnostics({
+  comfyUrl,
+  diagnostics,
+  promptId,
+}: {
+  comfyUrl: string;
+  diagnostics: ComfyCertificationDiagnostics;
+  promptId: string;
+}): Promise<"completed"> {
+  const timeouts = resolveCertificationTimeouts();
+  const startedAt = Date.now();
+  let lastQueueState: "absent" | "pending" | "running" | "unknown" = "unknown";
+  let historyCompleted = false;
+  let outputFilesDetected = false;
+
+  while (Date.now() - startedAt <= timeouts.executionTimeoutMs) {
+    let queue: unknown;
+    let history: unknown;
+    let historyRecord: Record<string, unknown> | null = null;
+    let error: string | undefined;
+
+    try {
+      queue = await fetchComfyJson({ comfyUrl, pathname: "/queue" });
+      lastQueueState = queueState(queue, promptId);
+    } catch (queueError) {
+      error = queueError instanceof Error ? queueError.message : String(queueError);
+    }
+
+    try {
+      history = await fetchComfyJson({ comfyUrl, pathname: `/history/${encodeURIComponent(promptId)}` });
+      diagnostics.finalHistory = history;
+      historyRecord = getHistoryRecord(history, promptId);
+      diagnostics.historyAppeared = Boolean(historyRecord);
+      if (historyRecord) {
+        const status = historyRecord.status && typeof historyRecord.status === "object"
+          ? historyRecord.status as Record<string, unknown>
+          : {};
+        const outputs = collectOutputFilenames(historyRecord);
+        outputFilesDetected = outputs.filenames.length > 0;
+        historyCompleted = status.completed === true || outputFilesDetected;
+        diagnostics.executionError = historyHasExecutionError(historyRecord);
+
+        if (diagnostics.executionError) {
+          throw new ComfyError("ComfyUI reported an execution error in history.", {
+            code: "COMFY_JOB_FAILED",
+            details: [diagnostics.executionError],
+            statusCode: 502,
+          });
+        }
+
+        if (historyCompleted && outputFilesDetected) {
+          diagnostics.timeoutHappenedBeforeHistory = false;
+          return "completed";
+        }
+      }
+    } catch (historyError) {
+      if (historyError instanceof ComfyError) {
+        throw historyError;
+      }
+      error = historyError instanceof Error ? historyError.message : String(historyError);
+    }
+
+    diagnostics.historyPolls.push({
+      completed: historyCompleted,
+      error,
+      hasHistory: Boolean(historyRecord),
+      hasOutputs: outputFilesDetected,
+      queueState: lastQueueState,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (lastQueueState === "pending" && Date.now() - startedAt > timeouts.queueTimeoutMs) {
+      break;
+    }
+
+    await sleep(500);
+  }
+
+  diagnostics.timeoutHappenedBeforeHistory = !diagnostics.historyAppeared;
+  diagnostics.timeoutPhase = classifyTimeoutPhase({
+    executionError: diagnostics.executionError,
+    historyAppeared: diagnostics.historyAppeared,
+    historyCompleted,
+    outputFilesDetected,
+    promptId,
+    queueState: lastQueueState,
+  });
+
+  throw new ComfyError(`ComfyUI job timed out: ${promptId}`, {
+    code: "COMFY_TIMEOUT",
+    details: [diagnostics.timeoutPhase],
+    statusCode: 504,
+  });
+}
+
 export async function runComfyCertification({
   bootstrap = bootstrapComfy,
   executeIfOnline = true,
@@ -127,6 +265,11 @@ export async function runComfyCertification({
     const adapter = getProviderAdapter("comfy");
     const workflowId = payload.workflowId as SupportedComfyWorkflowType;
     const bootstrapResult = await bootstrap();
+    const diagnostics = createInitialComfyDiagnostics({
+      comfyUrl: getComfyUrl(),
+      workflowId: String(payload.workflowId ?? workflowId),
+      workflowType: workflowId,
+    });
 
     pushPassed(phases, "Config validation", {
       adapterExists: adapter.providerId === "comfy",
@@ -180,6 +323,9 @@ export async function runComfyCertification({
     const client = new ComfyClient({ baseUrl: getComfyUrl() });
     try {
       await client.checkAvailability();
+      diagnostics.systemStats = await fetchComfyJson({ comfyUrl: getComfyUrl(), pathname: "/system_stats" }).catch((error) => ({
+        error: error instanceof Error ? error.message : String(error),
+      }));
       pushPassed(phases, "Health validation", { health: "online" });
     } catch (error) {
       pushSkipped(phases, "Health validation", {
@@ -201,7 +347,7 @@ export async function runComfyCertification({
       pushFailed(
         phases,
         "Workflow validation",
-        missingModel ? "comfy_model_missing" : "comfy_workflow_missing",
+        missingModel ? "comfy_model_missing" : getWorkflowValidationError(workflowValidation.errors),
         {
           errors: workflowValidation.errors,
           missingModel,
@@ -237,9 +383,48 @@ export async function runComfyCertification({
       smokeTest: true,
       workflowType: workflowId,
     });
+    diagnostics.workflowIdentity = collectWorkflowIdentityDiagnostics({
+      entry: dryRunPrompt.entry,
+      prompt: payload.prompt,
+      promptPayload: dryRunPrompt.promptPayload,
+      validation: workflowValidation,
+      workflowType: workflowId,
+    });
+
+    if (!diagnostics.workflowIdentity.positivePromptInjected) {
+      pushFailed(phases, "Workflow validation", "comfy_prompt_injection_failed", {
+        positivePromptNodeId: diagnostics.workflowIdentity.positivePromptNodeId,
+      });
+      await writeComfyCertificationDiagnostics(diagnostics);
+      return {
+        ...finalizeReport({ finalStatus: "failed", phases }),
+        diagnostics: {
+          promptId: diagnostics.promptId,
+          timeoutPhase: diagnostics.timeoutPhase,
+          workflowIdentity: diagnostics.workflowIdentity,
+        },
+      };
+    }
+
+    if (!diagnostics.workflowIdentity.saveImageNodePresent) {
+      pushFailed(phases, "Workflow validation", "comfy_output_node_missing", {
+        saveImageNodeId: diagnostics.workflowIdentity.saveImageNodeId,
+      });
+      await writeComfyCertificationDiagnostics(diagnostics);
+      return {
+        ...finalizeReport({ finalStatus: "failed", phases }),
+        diagnostics: {
+          promptId: diagnostics.promptId,
+          timeoutPhase: diagnostics.timeoutPhase,
+          workflowIdentity: diagnostics.workflowIdentity,
+        },
+      };
+    }
+
     pushPassed(phases, "Dry-run validation", {
       nodeCount: Object.keys(dryRunPrompt.promptPayload).length,
       outputPrefix: dryRunPrompt.outputPrefix,
+      workflowIdentity: diagnostics.workflowIdentity,
       workflowId,
     });
 
@@ -249,29 +434,72 @@ export async function runComfyCertification({
     }
 
     try {
+      diagnostics.queueBeforeSubmit = await fetchComfyJson({ comfyUrl: getComfyUrl(), pathname: "/queue" }).catch((error) => ({
+        error: error instanceof Error ? error.message : String(error),
+      }));
       const queued = await client.submitPrompt({ prompt: dryRunPrompt.promptPayload });
-      await client.waitForCompletion({
-        intervalMs: 500,
+      diagnostics.promptId = queued.promptId;
+      diagnostics.queueAfterSubmit = await fetchComfyJson({ comfyUrl: getComfyUrl(), pathname: "/queue" }).catch((error) => ({
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      await waitForComfyCompletionWithDiagnostics({
+        comfyUrl: getComfyUrl(),
+        diagnostics,
         promptId: queued.promptId,
-        timeoutMs: 60_000,
       });
       const outputs = await client.retrieveOutputs(queued.promptId);
+      diagnostics.outputDiagnostics = await collectOutputDiagnostics({
+        historyRecord: getHistoryRecord(diagnostics.finalHistory, queued.promptId),
+        outputs,
+      });
       const artifactValidationResult = {
         outputs,
         promptId: queued.promptId,
       };
+      diagnostics.artifactValidationRan = true;
+      if (diagnostics.outputDiagnostics) {
+        diagnostics.outputDiagnostics.artifactValidationRan = true;
+      }
+      await writeComfyCertificationDiagnostics(diagnostics);
       pushPassed(phases, "Certification execution", artifactValidationResult);
       pushPassed(phases, "Artifact validation", { outputCount: outputs.length });
-      return finalizeReport({ artifactValidationResult, finalStatus: "certified", phases });
+      return {
+        ...finalizeReport({ artifactValidationResult, finalStatus: "certified", phases }),
+        diagnostics: {
+          promptId: diagnostics.promptId,
+          timeoutPhase: diagnostics.timeoutPhase,
+          workflowIdentity: diagnostics.workflowIdentity,
+        },
+      };
     } catch (error) {
       if (error instanceof ComfyError && error.code === "COMFY_TIMEOUT") {
-        pushFailed(phases, "Certification execution", "provider_timeout", { error: error.message });
+        await writeComfyCertificationDiagnostics(diagnostics);
+        pushFailed(phases, "Certification execution", "provider_timeout", {
+          error: error.message,
+          timeoutPhase: diagnostics.timeoutPhase ?? error.details[0] ?? "unknown_timeout",
+        });
       } else if (error instanceof ComfyError && error.code === "COMFY_MISSING_OUTPUT") {
-        pushFailed(phases, "Artifact validation", "provider_artifact_invalid", { error: error.message });
+        diagnostics.outputDiagnostics = await collectOutputDiagnostics({
+          historyRecord: diagnostics.promptId ? getHistoryRecord(diagnostics.finalHistory, diagnostics.promptId) : null,
+        });
+        diagnostics.timeoutPhase = "outputs_not_found";
+        await writeComfyCertificationDiagnostics(diagnostics);
+        pushFailed(phases, "Artifact validation", "provider_artifact_invalid", {
+          error: error.message,
+          timeoutPhase: diagnostics.timeoutPhase,
+        });
       } else {
+        await writeComfyCertificationDiagnostics(diagnostics);
         pushFailed(phases, "Certification execution", error instanceof Error ? error.message : String(error));
       }
-      return finalizeReport({ finalStatus: "failed", phases });
+      return {
+        ...finalizeReport({ finalStatus: "failed", phases }),
+        diagnostics: {
+          promptId: diagnostics.promptId,
+          timeoutPhase: diagnostics.timeoutPhase,
+          workflowIdentity: diagnostics.workflowIdentity,
+        },
+      };
     }
   });
 }
