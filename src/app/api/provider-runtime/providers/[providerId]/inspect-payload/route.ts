@@ -36,11 +36,17 @@ export async function POST(
   const inspection = inspectProviderPayload(job);
 
   return NextResponse.json({
+    canExecuteWorkflow: inspection.canExecuteWorkflow,
     executionMode: inspection.executionMode,
     mappedPayload: inspection.mappedPayload,
     missingRequirements: inspection.missingRequirements,
     providerId: inspection.providerId,
+    providerLifecycleStatus: inspection.providerLifecycleStatus,
     readinessLevel: inspection.readinessLevel,
     warnings: inspection.warnings,
+    workflowCertificationStatus: inspection.workflowCertificationStatus,
+    workflowId: inspection.workflowId,
+    workflowMayExecute: inspection.canExecuteWorkflow === true,
+    workflowState: inspection.workflowState,
   });
 }

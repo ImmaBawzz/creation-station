@@ -5,6 +5,7 @@ import { getCredentialRequirements, hasProviderCredentials } from "./credentialR
 import { getProviderEnableRequirements, isProviderExecutionEnabled } from "./endpointReadiness";
 import { getProviderRuntimeExecutionMode } from "./executionMode";
 import { mapPayloadForInspection } from "./payloadReadiness";
+import { evaluateJobWorkflowCertificationGate, getProviderWorkflowCertificationState } from "../workflowCertification";
 import type {
   ProviderGateDecision,
   ProviderPayloadInspection,
@@ -61,9 +62,14 @@ export function getProviderReadiness(providerId: ProviderType, job?: ProviderJob
   const warnings = getArtifactReadinessWarnings(providerId);
   const missingRequirements: string[] = [];
   const payload = job ? mapPayloadForInspection(job) : { missingRequirements: [], warnings: [] };
+  const workflowGate = job ? evaluateJobWorkflowCertificationGate(job) : undefined;
+  const providerWorkflowState = getProviderWorkflowCertificationState(providerId);
 
   missingRequirements.push(...payload.missingRequirements);
   warnings.push(...payload.warnings);
+  if (workflowGate) {
+    warnings.push(...workflowGate.warnings);
+  }
 
   const payloadReady = payload.missingRequirements.length === 0;
   let readinessLevel = rankReadinessLevel(providerId, payloadReady);
@@ -79,8 +85,14 @@ export function getProviderReadiness(providerId: ProviderType, job?: ProviderJob
 
   if (providerId !== "mock" && executionMode === "execute") {
     missingRequirements.push(...getProviderEnableRequirements(providerId));
+    if (workflowGate) {
+      missingRequirements.push(...workflowGate.missingRequirements);
+    }
     if (!isProviderExecutionEnabled(providerId) || !hasProviderCredentials(providerId)) {
       readinessLevel = hasAdapter(providerId) ? "dryRunReady" : "unavailable";
+    }
+    if (workflowGate && !workflowGate.canExecuteWorkflow) {
+      readinessLevel = hasAdapter(providerId) ? "certificationReady" : "unavailable";
     }
   }
 
@@ -92,8 +104,11 @@ export function getProviderReadiness(providerId: ProviderType, job?: ProviderJob
     executionMode,
     missingRequirements: uniqueMissingRequirements,
     providerId,
+    providerLifecycleStatus: workflowGate?.providerLifecycleStatus ?? providerWorkflowState.providerLifecycleStatus,
     readinessLevel,
     warnings: [...new Set(warnings)],
+    workflowCertificationStatus: workflowGate?.workflowCertificationStatus,
+    workflowState: workflowGate?.workflowState,
   };
 }
 
@@ -107,9 +122,11 @@ export function inspectProviderPayload(job: ProviderJobRequest): ProviderPayload
 
   return {
     ...readiness,
+    canExecuteWorkflow: readiness.workflowState ? readiness.canExecute && readiness.workflowCertificationStatus === "production_certified" : undefined,
     mappedPayload: payload.mappedPayload,
     missingRequirements: [...new Set([...readiness.missingRequirements, ...payload.missingRequirements])],
     warnings: [...new Set([...readiness.warnings, ...payload.warnings])],
+    workflowId: typeof job.workflowId === "string" ? job.workflowId : undefined,
   };
 }
 

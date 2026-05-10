@@ -1,4 +1,9 @@
 import type { ProviderJobRequest, ProviderType } from "../types";
+import type {
+  ProviderLifecycleStatus,
+  WorkflowCertificationStatus,
+  WorkflowCertificationState,
+} from "../workflowCertification";
 
 export type ProviderReadinessLevel =
   | "unavailable"
@@ -22,12 +27,17 @@ export type ProviderReadinessReport = {
   executionMode: ProviderRuntimeExecutionMode;
   missingRequirements: string[];
   providerId: ProviderType;
+  providerLifecycleStatus?: ProviderLifecycleStatus;
   readinessLevel: ProviderReadinessLevel;
   warnings: string[];
+  workflowCertificationStatus?: WorkflowCertificationStatus;
+  workflowState?: WorkflowCertificationState;
 };
 
 export type ProviderPayloadInspection = ProviderReadinessReport & {
+  canExecuteWorkflow?: boolean;
   mappedPayload?: unknown;
+  workflowId?: string;
 };
 
 export type ProviderGateDecision =

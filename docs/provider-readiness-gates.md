@@ -95,6 +95,51 @@ Bootstrap safety rules:
 - It does not require storing personal machine paths or secrets in committed files.
 - It does not enable WAN, Kling, or Runway.
 
+## Workflow Certification Gates
+
+Provider readiness is split into two certification layers:
+
+| Layer | Meaning |
+| --- | --- |
+| Provider lifecycle certification | The provider adapter can submit, poll, retrieve output, and validate artifacts. |
+| Workflow production certification | A specific workflow is safe to execute in production mode. |
+
+Comfy can be provider-lifecycle certified through `comfy-provider-smoke` while production workflows remain blocked. A smoke pass does not certify `flux-fast-concept`.
+
+Current Comfy state:
+
+```json
+{
+  "provider": "comfy",
+  "providerLifecycleStatus": "lifecycle_certified",
+  "workflows": {
+    "flux-fast-concept": {
+      "status": "timeout",
+      "classification": "running_no_history"
+    },
+    "flux-dev-cinematic": {
+      "status": "uncertified"
+    }
+  }
+}
+```
+
+Production execution is allowed only when:
+
+- `providerLifecycleStatus = lifecycle_certified`
+- `workflowCertificationStatus = production_certified`
+- `PROVIDER_RUNTIME_EXECUTION_MODE=execute`
+- the provider-specific enable flag is true, such as `PROVIDER_RUNTIME_ENABLE_COMFY=true`
+
+The payload inspection route includes the provider lifecycle status, workflow certification status, and whether the exact requested workflow may execute.
+
+Workflow certification APIs:
+
+```http
+GET /api/provider-runtime/workflows/certification
+GET /api/provider-runtime/workflows/flux-fast-concept/certification
+```
+
 ## Routes
 
 Readiness:

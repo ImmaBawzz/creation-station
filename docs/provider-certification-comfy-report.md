@@ -44,6 +44,14 @@ No WAN, Kling, or Runway execution was enabled.
 
 Comfy may be considered lifecycle-certified for the local provider runtime submit, poll, output, and artifact validation path. Comfy is not production-certified for `flux-fast-concept`, and this does not make Comfy production-default.
 
+Workflow-level provider runtime gates now enforce that distinction:
+
+- Provider lifecycle certification answers whether the adapter can submit, poll, retrieve output, and validate artifacts.
+- Workflow production certification answers whether a specific workflow is safe for real production execution.
+- `comfy-provider-smoke` can certify the Comfy provider lifecycle.
+- `comfy-provider-smoke` does not certify `flux-fast-concept` or any other production workflow.
+- `flux-fast-concept` remains blocked because its latest production classification is `running_no_history`.
+
 ## Automated Bootstrap
 
 The Comfy certification runner now calls `bootstrapComfy()` before provider certification.
@@ -343,6 +351,31 @@ Certification reports distinguish lifecycle and production state:
 ```
 
 If smoke certification passes, Comfy may be treated as provider-lifecycle certified while `flux-fast-concept` remains production-uncertified. Production execution must still stay disabled until production certification passes.
+
+Production execution is allowed only when all of the following are true:
+
+- `providerLifecycleStatus` is `lifecycle_certified`.
+- The exact requested workflow has `workflowCertificationStatus` of `production_certified`.
+- `PROVIDER_RUNTIME_EXECUTION_MODE=execute`.
+- `PROVIDER_RUNTIME_ENABLE_COMFY=true`.
+
+Current gate state:
+
+```json
+{
+  "provider": "comfy",
+  "providerLifecycleStatus": "lifecycle_certified",
+  "workflows": {
+    "flux-fast-concept": {
+      "status": "timeout",
+      "classification": "running_no_history"
+    },
+    "flux-dev-cinematic": {
+      "status": "uncertified"
+    }
+  }
+}
+```
 
 ## Final Certification Status
 

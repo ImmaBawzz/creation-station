@@ -305,15 +305,16 @@ describe("Provider Runtime Core", () => {
       expect(readiness.missingRequirements).toContain("PROVIDER_RUNTIME_EXECUTION_MODE");
     });
 
-    it("Comfy can become executionReady with COMFY_API_URL and enable flag", () => {
+    it("Comfy lifecycle readiness does not execute when the requested workflow is not production-certified", () => {
       process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
       process.env.PROVIDER_RUNTIME_ENABLE_COMFY = "true";
       process.env.COMFY_API_URL = "http://127.0.0.1:8188";
 
-      expect(getProviderReadiness("comfy")).toMatchObject({
-        canExecute: true,
+      expect(getProviderReadiness("comfy", { ...canonicalJob, workflowId: "flux-fast-concept" })).toMatchObject({
+        canExecute: false,
         executionMode: "execute",
-        readinessLevel: "executionReady",
+        providerLifecycleStatus: "lifecycle_certified",
+        workflowCertificationStatus: "timeout",
       });
     });
 
