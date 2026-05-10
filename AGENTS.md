@@ -98,7 +98,7 @@ Regeneration loop prevention is allowed only under controlled scope rules:
 - The approved module boundary is `src/modules/regeneration-governor/`.
 - The regeneration governor must remain read-only analysis and advisory — it must not trigger actual regeneration itself.
 - It must not modify upstream manifests, database models, or pipeline outputs.
-- Output is limited to `regenerationReport.json` written to `projects/[id]/quality/`.
+- Output is limited to `regenerationReport.json`, `failureMemory.json`, `failureMemoryReport.json`, and `patternMemory.json` written to `projects/[id]/quality/` or `visual-workspace/quality/` (for global cross-project patterns).
 - No new npm dependencies are allowed.
 - No external service calls are allowed.
 - Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.

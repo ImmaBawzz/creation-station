@@ -152,3 +152,90 @@ export type RegenerationReport = {
   };
   verdict: RegenerationVerdict;
 };
+
+// ─── Global Pattern Memory ───────────────────────────────────────────────────
+
+export type FailurePatternCategory =
+  | "provider"
+  | "prompt"
+  | "visual"
+  | "workflow"
+  | "timeline"
+  | "quality";
+
+export type FailurePatternEntry = {
+  category: FailurePatternCategory;
+  firstSeenAt: string;
+  frequency: number;
+  lastSeenAt: string;
+  pattern: string;
+  projectIds: string[];
+  recoveryRate: number;
+  severity: "low" | "medium" | "high" | "critical";
+  totalCostUnits: number;
+};
+
+export type ProviderReliabilityRecord = {
+  failureCount: number;
+  lastUpdatedAt: string;
+  provider: string;
+  reliabilityScore: number;
+  successCount: number;
+  totalAttempts: number;
+  workflowScores: Record<string, number>;
+};
+
+export type PromptFailureEntry = {
+  failureCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  phrase: string;
+  projectIds: string[];
+  relatedFailureKinds: RegenerationFailureKind[];
+  severity: "low" | "medium" | "high";
+};
+
+export type VisualFailureEntry = {
+  affectedSceneCount: number;
+  failureCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  pattern: string;
+  projectIds: string[];
+  relatedProviders: string[];
+  severity: "low" | "medium" | "high";
+};
+
+export type PreventionRecommendation = {
+  action: string;
+  category: FailurePatternCategory;
+  confidence: number;
+  reason: string;
+  relatedPatterns: string[];
+};
+
+export type GlobalPatternMemory = {
+  createdAt: string;
+  failurePatterns: FailurePatternEntry[];
+  promptFailures: PromptFailureEntry[];
+  providerScores: ProviderReliabilityRecord[];
+  updatedAt: string;
+  version: number;
+  visualFailures: VisualFailureEntry[];
+};
+
+export type FailureMemoryReport = {
+  createdAt: string;
+  globalPatternCount: number;
+  preventionRecommendations: PreventionRecommendation[];
+  projectId: string;
+  providerScores: ProviderReliabilityRecord[];
+  summary: {
+    averageRecoveryRate: number;
+    mostCommonFailures: Array<{ count: number; pattern: string }>;
+    totalCostWaste: number;
+    totalFailuresTracked: number;
+  };
+  topPromptFailures: PromptFailureEntry[];
+  topVisualFailures: VisualFailureEntry[];
+};

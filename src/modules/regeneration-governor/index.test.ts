@@ -4,9 +4,14 @@ import { evaluateEscalations, hasBlockingEscalation } from "@/modules/regenerati
 import { evaluateCostProtection, estimateCostUnits } from "@/modules/regeneration-governor/costProtector";
 import { buildAllFallbacks, decideFallback } from "@/modules/regeneration-governor/fallbackDecision";
 import { buildFailureMemory, getSceneFailureRecord, recordProviderAttempt } from "@/modules/regeneration-governor/failureMemory";
+import { getTopPatterns, isKnownRecurringPattern } from "@/modules/regeneration-governor/patternMemory";
+import { generatePreventionRecommendations } from "@/modules/regeneration-governor/preventionRecommendations";
+import { extractPromptFailures, isUnstablePromptPhrase } from "@/modules/regeneration-governor/promptFailurePatterns";
+import { calculateProviderScores, getBestProvider, getUnreliableProviders } from "@/modules/regeneration-governor/providerScoring";
 import { buildAllStrategies } from "@/modules/regeneration-governor/regenerationStrategy";
 import { checkProjectRetryBudget, checkSceneRetryLimit, getAllSceneLimits } from "@/modules/regeneration-governor/retryLimiter";
-import type { ProjectFailureSummary, SceneRegenerationStrategy } from "@/modules/regeneration-governor/types";
+import { extractVisualFailures } from "@/modules/regeneration-governor/visualFailurePatterns";
+import type { GlobalPatternMemory, ProjectFailureSummary, SceneRegenerationStrategy } from "@/modules/regeneration-governor/types";
 import type { QualityIssue } from "@/modules/quality-director/types";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
@@ -29,6 +34,19 @@ function makeMemory(overrides?: Partial<ProjectFailureSummary>): ProjectFailureS
     projectId: "proj-001",
     sceneRecords: [],
     totalProjectAttempts: 0,
+    ...overrides,
+  };
+}
+
+function makeGlobalMemory(overrides?: Partial<GlobalPatternMemory>): GlobalPatternMemory {
+  return {
+    createdAt: "2026-01-01T00:00:00Z",
+    failurePatterns: [],
+    promptFailures: [],
+    providerScores: [],
+    updatedAt: "2026-01-01T00:00:00Z",
+    version: 1,
+    visualFailures: [],
     ...overrides,
   };
 }
@@ -351,5 +369,144 @@ describe("fallbackDecision", () => {
 
     const decision = decideFallback("scene-001", strategy, escalation, memory);
     expect(decision.fallbackOutcome).toBe("use-adjacent-scene");
+  });
+});
+
+// ── patternMemory ─────────────────────────────────────────────────────────────
+
+describe("patternMemory", () => {
+  it("returns top patterns sorted by frequency", () => {
+    const global = makeGlobalMemory({
+      failurePatterns: [
+        { category: "visual", firstSeenAt: "", frequency: 5, lastSeenAt: "", pattern: "repetition-issue", projectIds: [], recoveryRate: 0, severity: "high", totalCostUnits: 5 },
+        { category: "workflow", firstSeenAt: "", frequency: 2, lastSeenAt: "", pattern: "pacing-issue", projectIds: [], recoveryRate: 0, severity: "low", totalCostUnits: 2 },
+        { category: "quality", firstSeenAt: "", frequency: 8, lastSeenAt: "", pattern: "quality-check-failed", projectIds: [], recoveryRate: 0, severity: "critical", totalCostUnits: 8 },
+      ],
+    });
+    const top = getTopPatterns(global, 2);
+    expect(top).toHaveLength(2);
+    expect(top[0].pattern).toBe("quality-check-failed");
+  });
+
+  it("detects known recurring patterns", () => {
+    const global = makeGlobalMemory({
+      failurePatterns: [
+        { category: "visual", firstSeenAt: "", frequency: 5, lastSeenAt: "", pattern: "repetition-issue", projectIds: [], recoveryRate: 0, severity: "high", totalCostUnits: 5 },
+      ],
+    });
+    expect(isKnownRecurringPattern(global, "repetition-issue", 3)).toBe(true);
+    expect(isKnownRecurringPattern(global, "pacing-issue", 3)).toBe(false);
+  });
+});
+
+// ── providerScoring ───────────────────────────────────────────────────────────
+
+describe("providerScoring", () => {
+  it("calculates scores from project memory", () => {
+    const issues = [makeIssue({ sceneId: "scene-001", severity: "critical" })];
+    let memory = buildFailureMemory("proj-001", issues);
+    memory = recordProviderAttempt(memory, "scene-001", "mock");
+    const scores = calculateProviderScores(makeGlobalMemory(), memory);
+    expect(scores.length).toBeGreaterThan(0);
+    expect(scores[0].provider).toBe("mock");
+  });
+
+  it("returns best provider excluding unreliable ones", () => {
+    const scores = [
+      { failureCount: 8, lastUpdatedAt: "", provider: "bad-provider", reliabilityScore: 30, successCount: 2, totalAttempts: 10, workflowScores: {} },
+      { failureCount: 1, lastUpdatedAt: "", provider: "good-provider", reliabilityScore: 90, successCount: 9, totalAttempts: 10, workflowScores: {} },
+    ];
+    const best = getBestProvider(scores, ["bad-provider"]);
+    expect(best?.provider).toBe("good-provider");
+  });
+
+  it("identifies unreliable providers", () => {
+    const scores = [
+      { failureCount: 8, lastUpdatedAt: "", provider: "bad", reliabilityScore: 20, successCount: 2, totalAttempts: 10, workflowScores: {} },
+      { failureCount: 1, lastUpdatedAt: "", provider: "good", reliabilityScore: 90, successCount: 9, totalAttempts: 10, workflowScores: {} },
+    ];
+    const unreliable = getUnreliableProviders(scores, 50);
+    expect(unreliable).toHaveLength(1);
+    expect(unreliable[0].provider).toBe("bad");
+  });
+});
+
+// ── promptFailurePatterns ─────────────────────────────────────────────────────
+
+describe("promptFailurePatterns", () => {
+  it("detects known unstable phrases", () => {
+    expect(isUnstablePromptPhrase("extreme camera shake effect")).toBe(true);
+    expect(isUnstablePromptPhrase("gentle pan across landscape")).toBe(false);
+  });
+
+  it("extracts prompt failures from issue summaries", () => {
+    const memory = makeMemory({
+      sceneRecords: [{
+        attempts: [{ attemptNumber: 1, failureKind: "visual-consistency-issue", issueSummary: "Extreme motion blur causing instability", timestamp: "" }],
+        firstFailedAt: "", lastFailedAt: "", providersTried: [], providersTriedCount: 0,
+        recurringIssueKinds: [], sceneId: "scene-001", totalAttempts: 1,
+      }],
+    });
+    const results = extractPromptFailures(memory);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].phrase).toBe("extreme motion blur");
+  });
+});
+
+// ── visualFailurePatterns ─────────────────────────────────────────────────────
+
+describe("visualFailurePatterns", () => {
+  it("extracts visual failures from issue summaries", () => {
+    const memory = makeMemory({
+      sceneRecords: [{
+        attempts: [{ attemptNumber: 1, failureKind: "visual-consistency-issue", issueSummary: "Continuity drift detected between scenes", timestamp: "" }],
+        firstFailedAt: "", lastFailedAt: "", providersTried: ["mock"], providersTriedCount: 1,
+        recurringIssueKinds: [], sceneId: "scene-001", totalAttempts: 1,
+      }],
+    });
+    const results = extractVisualFailures(memory);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].pattern).toBe("continuity drift");
+  });
+
+  it("tracks related providers", () => {
+    const memory = makeMemory({
+      sceneRecords: [{
+        attempts: [{ attemptNumber: 1, failureKind: "visual-consistency-issue", issueSummary: "Fallback image used for scene", timestamp: "" }],
+        firstFailedAt: "", lastFailedAt: "", providersTried: ["mock", "mock-hq"], providersTriedCount: 2,
+        recurringIssueKinds: [], sceneId: "scene-001", totalAttempts: 1,
+      }],
+    });
+    const results = extractVisualFailures(memory);
+    const fallbackEntry = results.find((r) => r.pattern === "fallback image degradation");
+    expect(fallbackEntry?.relatedProviders).toContain("mock");
+    expect(fallbackEntry?.relatedProviders).toContain("mock-hq");
+  });
+});
+
+// ── preventionRecommendations ─────────────────────────────────────────────────
+
+describe("preventionRecommendations", () => {
+  it("generates provider avoidance recommendations", () => {
+    const scores = [
+      { failureCount: 8, lastUpdatedAt: "", provider: "bad-provider", reliabilityScore: 20, successCount: 2, totalAttempts: 10, workflowScores: {} },
+    ];
+    const memory = makeMemory();
+    const global = makeGlobalMemory();
+    const recs = generatePreventionRecommendations(global, memory, scores);
+    const providerRec = recs.find((r) => r.category === "provider");
+    expect(providerRec).toBeDefined();
+    expect(providerRec?.action).toContain("bad-provider");
+  });
+
+  it("generates recommendations for recurring global patterns", () => {
+    const global = makeGlobalMemory({
+      failurePatterns: [
+        { category: "visual", firstSeenAt: "", frequency: 5, lastSeenAt: "", pattern: "repetition-issue", projectIds: ["p1", "p2"], recoveryRate: 0, severity: "high", totalCostUnits: 5 },
+      ],
+    });
+    const memory = makeMemory();
+    const recs = generatePreventionRecommendations(global, memory, []);
+    expect(recs.some((r) => r.relatedPatterns.includes("repetition-issue"))).toBe(true);
   });
 });

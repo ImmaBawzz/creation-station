@@ -6,17 +6,25 @@ import { evaluateCostProtection } from "@/modules/regeneration-governor/costProt
 import { evaluateEscalations, hasBlockingEscalation } from "@/modules/regeneration-governor/escalationRules";
 import { buildAllFallbacks } from "@/modules/regeneration-governor/fallbackDecision";
 import { buildFailureMemory, getSceneFailureRecord } from "@/modules/regeneration-governor/failureMemory";
+import { contributeToGlobalPatterns, readGlobalPatternMemory } from "@/modules/regeneration-governor/patternMemory";
+import { buildFailureMemoryReport } from "@/modules/regeneration-governor/preventionRecommendations";
+import { extractPromptFailures, mergePromptFailures } from "@/modules/regeneration-governor/promptFailurePatterns";
+import { calculateProviderScores, mergeProviderScores } from "@/modules/regeneration-governor/providerScoring";
 import { buildAllStrategies } from "@/modules/regeneration-governor/regenerationStrategy";
 import { checkProjectRetryBudget, getAllSceneLimits } from "@/modules/regeneration-governor/retryLimiter";
 import type {
+  FailureMemoryReport,
   ProjectFailureSummary,
   RegenerationReport,
   RegenerationVerdict,
 } from "@/modules/regeneration-governor/types";
+import { extractVisualFailures, mergeVisualFailures } from "@/modules/regeneration-governor/visualFailurePatterns";
+import { writeGlobalPatternMemory } from "@/modules/regeneration-governor/patternMemory";
 import { getVisualProjectAssetFolders } from "@/modules/visual-engine/paths";
 
 const REGENERATION_REPORT_FILE = "regenerationReport.json";
 const FAILURE_MEMORY_FILE = "failureMemory.json";
+const FAILURE_MEMORY_REPORT_FILE = "failureMemoryReport.json";
 const QUALITY_DIR = "quality";
 
 type GovernorError = Error & {
@@ -41,6 +49,10 @@ function getReportPath(projectId: string): string {
 
 function getMemoryPath(projectId: string): string {
   return path.join(getQualityDirectory(projectId), FAILURE_MEMORY_FILE);
+}
+
+function getMemoryReportPath(projectId: string): string {
+  return path.join(getQualityDirectory(projectId), FAILURE_MEMORY_REPORT_FILE);
 }
 
 async function readFailureMemory(projectId: string): Promise<ProjectFailureSummary | null> {
@@ -68,6 +80,12 @@ async function writeReport(report: RegenerationReport): Promise<void> {
   const dir = getQualityDirectory(report.projectId);
   await mkdir(dir, { recursive: true });
   await writeFile(getReportPath(report.projectId), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+}
+
+async function writeMemoryReport(report: FailureMemoryReport): Promise<void> {
+  const dir = getQualityDirectory(report.projectId);
+  await mkdir(dir, { recursive: true });
+  await writeFile(getMemoryReportPath(report.projectId), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
 function computeVerdict(
@@ -102,8 +120,8 @@ function computeVerdict(
 
 /**
  * Run the regeneration governor against the latest quality report.
- * Reads the existing failure memory, incorporates new failures, and
- * produces a regenerationReport.json with strategies and fallback decisions.
+ * Reads the existing failure memory, incorporates new failures,
+ * contributes to global pattern memory, and produces reports.
  */
 export async function runRegenerationGovernor(projectId: string): Promise<RegenerationReport> {
   const qualityReport = await readQualityReport(projectId);
@@ -122,6 +140,23 @@ export async function runRegenerationGovernor(projectId: string): Promise<Regene
 
   // Persist updated failure memory
   await writeFailureMemory(memory);
+
+  // Contribute to global pattern memory (cross-project learning)
+  let globalMemory = await contributeToGlobalPatterns(memory);
+
+  // Extract and merge prompt/visual failure patterns
+  const promptFailures = extractPromptFailures(memory);
+  globalMemory = mergePromptFailures(globalMemory, promptFailures, projectId);
+
+  const visualFailures = extractVisualFailures(memory);
+  globalMemory = mergeVisualFailures(globalMemory, visualFailures, projectId);
+
+  // Calculate and merge provider scores
+  const providerScores = calculateProviderScores(globalMemory, memory);
+  globalMemory = mergeProviderScores(globalMemory, providerScores);
+
+  // Persist updated global memory
+  await writeGlobalPatternMemory(globalMemory);
 
   // Evaluate limits, costs, escalations
   const projectBudget = checkProjectRetryBudget(memory);
@@ -172,6 +207,47 @@ export async function runRegenerationGovernor(projectId: string): Promise<Regene
   await writeReport(report);
 
   return report;
+}
+
+/**
+ * Generate a failure memory report for a project.
+ * Combines global pattern memory with project-specific failure data.
+ */
+export async function generateMemoryReport(projectId: string): Promise<FailureMemoryReport> {
+  const projectMemory = await readFailureMemory(projectId);
+
+  if (!projectMemory) {
+    throw createGovernorError(
+      "No failure memory found. Run the regeneration governor before generating a memory report.",
+      404,
+      ["failureMemory.json missing"],
+    );
+  }
+
+  const globalMemory = await readGlobalPatternMemory();
+  const report = buildFailureMemoryReport(projectId, globalMemory, projectMemory);
+
+  await writeMemoryReport(report);
+
+  return report;
+}
+
+/**
+ * Read an existing failure memory report from disk.
+ */
+export async function readMemoryReport(projectId: string): Promise<FailureMemoryReport | null> {
+  try {
+    const source = await readFile(getMemoryReportPath(projectId), "utf8");
+    const payload = JSON.parse(source) as FailureMemoryReport;
+
+    if (!payload || typeof payload !== "object" || !payload.projectId) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -253,6 +329,7 @@ export async function getSceneStatus(projectId: string, sceneId: string) {
 }
 
 export type {
+  FailureMemoryReport,
   RegenerationReport,
   RegenerationVerdict,
   ProjectFailureSummary,
