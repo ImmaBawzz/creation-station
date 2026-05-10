@@ -1,6 +1,6 @@
 # Local Comfy Provider Certification Report
 
-Generated: 2026-05-10T20:59:53.253Z
+Generated: 2026-05-10T21:38:22.640Z
 
 ## Summary
 
@@ -14,14 +14,35 @@ PROVIDER_RUNTIME_ENABLE_KLING=false
 PROVIDER_RUNTIME_ENABLE_RUNWAY=false
 COMFY_API_URL=http://127.0.0.1:8188
 COMFY_AUTO_START=false
-npm run certify:provider -- comfy
+npm run certify:provider -- comfy --smoke
 ```
 
-Final status: `failed`
+Final status: `certified`
 
-Certified: `false`
+Lifecycle certified: `true`
+
+Production certified: `false`
 
 No WAN, Kling, or Runway execution was enabled.
+
+## Certification State
+
+```json
+{
+  "provider": "comfy",
+  "smokeCertification": {
+    "status": "passed",
+    "reason": "provider_lifecycle_certified"
+  },
+  "productionCertification": {
+    "workflowType": "flux-fast-concept",
+    "status": "timeout",
+    "reason": "running_no_history"
+  }
+}
+```
+
+Comfy may be considered lifecycle-certified for the local provider runtime submit, poll, output, and artifact validation path. Comfy is not production-certified for `flux-fast-concept`, and this does not make Comfy production-default.
 
 ## Automated Bootstrap
 
@@ -149,6 +170,36 @@ Health endpoint: `/system_stats`
 
 Local ComfyUI was already reachable at `http://127.0.0.1:8188`, so certification proceeded past bootstrap and health validation.
 
+## Smoke Certification Result
+
+Status: `passed`
+
+Workflow type: `comfy-provider-smoke`
+
+Workflow strategy: `checkpoint`
+
+Purpose: provider lifecycle only.
+
+The smoke run completed:
+
+```text
+submit -> poll -> output -> artifact validation
+```
+
+Observed result:
+
+| Field | Value |
+| --- | --- |
+| Bootstrap status | `already_running` |
+| Health | `online` |
+| Node count | `7` |
+| Prompt ID | `cbb48ee5-d8af-4b86-a767-97146a5fb390` |
+| Output count | `1` |
+| Artifact byte length | `121068` |
+| Artifact validation | `passed` |
+
+Generated Comfy output media remains a local Comfy artifact and is not committed.
+
 ## Payload Inspection Result
 
 The configured safe certification payload is:
@@ -242,9 +293,11 @@ An automated local Comfy interrupt was attempted through `POST /interrupt` after
 
 ## Artifact Validation Result
 
-Status: not run
+Production workflow status: not run after the smoke certification.
 
-Reason: certification execution timed out before output retrieval.
+Reason: the latest command was `comfy --smoke`, which intentionally certifies provider lifecycle only. The previous `flux-fast-concept` production run timed out before output retrieval.
+
+Smoke artifact validation status: `passed`
 
 Output diagnostics now distinguish completed history with missing outputs from provider timeouts. If history completes without output filenames, the run is classified as `history_no_outputs`. If output filenames exist but files cannot be found or accessed, the run is classified as `outputs_not_found`.
 
@@ -293,13 +346,15 @@ If smoke certification passes, Comfy may be treated as provider-lifecycle certif
 
 ## Final Certification Status
 
-`failed`
+Lifecycle: `passed`
 
-This is a real local certification failure caused by `provider_timeout`. Comfy is not marked certified and Comfy is not production-default.
+Production `flux-fast-concept`: `timeout`
+
+The local Comfy provider lifecycle is certified through the smoke workflow. `flux-fast-concept` remains production-uncertified because it previously timed out as `running_no_history`. Comfy is not production-default and should not be enabled for real production execution until production certification passes.
 
 ## Next Recommended Step
 
-Investigate why the safe `flux-fast-concept` certification workflow did not complete within the certification timeout, then rerun:
+Keep the provider lifecycle path as certified and investigate why `flux-fast-concept` stays running without history. The next safe branch is production workflow optimization or model/runtime diagnosis, then rerun:
 
 ```powershell
 npm run certify:provider -- comfy
