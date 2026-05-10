@@ -102,6 +102,31 @@ Observed diagnostic classification:
 
 This supports a bounded diagnosis: the certification did not time out waiting in the queue and did not reach output import. It timed out while Comfy considered the prompt running, before history was written.
 
+Runtime forensics now also write:
+
+```text
+.debug/comfy-runtime-forensics.json
+```
+
+This ignored file records `/system_stats`, `/object_info`, queue and history snapshots before and after submit, the submitted workflow node IDs, model filenames, the current `queue_running` item, whether the prompt remains running, whether history appears, and whether outputs appear without import.
+
+Runtime timeout classifications:
+
+| Classification | Meaning |
+| --- | --- |
+| `submit_failed` | Submit failed before `prompt_id` was returned. |
+| `queued_never_started` | Prompt stayed in `queue_pending`. |
+| `running_no_history` | Prompt stayed in `queue_running` and history never appeared. |
+| `running_node_unknown` | Prompt was running with insufficient node-level detail. |
+| `history_error` | Comfy history reported an execution error. |
+| `history_no_outputs` | History appeared but contained no outputs. |
+| `outputs_not_found` | History named outputs but files were not accessible. |
+| `artifact_invalid` | Artifact validation failed after output retrieval. |
+| `interrupted_after_timeout` | Local interrupt was issued after timeout. |
+| `unknown` | Forensics could not classify the state. |
+
+Current diagnosis: `running_no_history`.
+
 ## Readiness State
 
 | Check | Result |
@@ -227,7 +252,44 @@ Output diagnostics now distinguish completed history with missing outputs from p
 
 The primary certification workflow remains `flux-fast-concept`. If that workflow is too slow or model-heavy, certification must keep the production workflow marked as timed out and uncertified.
 
-A lightweight provider lifecycle workflow may be used only if it is explicitly registered as `comfy-provider-smoke`. That smoke workflow may verify submit, poll, output, and artifact validation plumbing, but it does not replace `flux-fast-concept` production certification.
+A lightweight provider lifecycle workflow is available as `comfy-provider-smoke` through:
+
+```powershell
+npm run certify:provider -- comfy --smoke
+```
+
+The smoke workflow verifies provider lifecycle only:
+
+```text
+submit -> poll -> output -> artifact validation
+```
+
+Smoke workflow model strategy:
+
+1. Prefer a lightweight checkpoint workflow if any local checkpoint is discovered under configured Comfy model roots.
+2. Fall back to a reduced FLUX workflow when checkpoint models are absent but FLUX dependencies are present.
+3. Return `comfy_smoke_model_missing` when neither checkpoint nor FLUX dependencies are available.
+
+The smoke workflow does not replace `flux-fast-concept` production certification.
+
+Certification reports distinguish lifecycle and production state:
+
+```json
+{
+  "provider": "comfy",
+  "smokeCertification": {
+    "status": "passed | failed | skipped",
+    "reason": "..."
+  },
+  "productionCertification": {
+    "workflowType": "flux-fast-concept",
+    "status": "passed | failed | timeout | skipped",
+    "reason": "..."
+  }
+}
+```
+
+If smoke certification passes, Comfy may be treated as provider-lifecycle certified while `flux-fast-concept` remains production-uncertified. Production execution must still stay disabled until production certification passes.
 
 ## Final Certification Status
 

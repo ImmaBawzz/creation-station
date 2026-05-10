@@ -2,6 +2,7 @@ import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
 import { runComfyCertification } from "./comfyCertification";
+import { runComfySmokeCertification } from "./comfySmokeCertification";
 import { runCertification } from "./certify";
 import type { ProviderType } from "../types";
 import { writeFile } from "node:fs/promises";
@@ -18,13 +19,14 @@ async function main() {
   }
 
   const providerId = providerArg as ProviderType;
+  const smokeMode = args.includes("--smoke");
 
   console.log(`\n=================================================`);
   console.log(`  Starting Certification Pipeline: [${providerId.toUpperCase()}]`);
   console.log(`=================================================\n`);
 
   const report = providerId === "comfy"
-    ? await runComfyCertification()
+    ? smokeMode ? await runComfySmokeCertification() : await runComfyCertification()
     : await runCertification(providerId);
   const status = "overallStatus" in report ? report.overallStatus : report.finalStatus;
   const durationSeconds = "totalDurationMs" in report ? (report.totalDurationMs / 1000).toFixed(2) : "0.00";
