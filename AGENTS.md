@@ -91,6 +91,18 @@ Quality evaluation is allowed only under controlled scope rules:
 - No external service calls are allowed.
 - Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
 
+## Controlled Regeneration Governor Scope
+
+Regeneration loop prevention is allowed only under controlled scope rules:
+
+- The approved module boundary is `src/modules/regeneration-governor/`.
+- The regeneration governor must remain read-only analysis and advisory — it must not trigger actual regeneration itself.
+- It must not modify upstream manifests, database models, or pipeline outputs.
+- Output is limited to `regenerationReport.json` written to `projects/[id]/quality/`.
+- No new npm dependencies are allowed.
+- No external service calls are allowed.
+- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
+
 ## Allowed Work
 
 You may:
@@ -177,7 +189,7 @@ Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
 - More than 5 files need changes for one task, unless the work is a pre-approved orchestration milestone within the existing architecture and satisfies every orchestration exception rule below.
-- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, and the controlled `src/modules/quality-director/` read-only analysis scope.
+- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, and the controlled `src/modules/regeneration-governor/` loop-prevention scope.
 - A requested video-generation change attempts real provider execution, custom node expansion, or any unapproved integration surface beyond the mock-provider orchestration boundary.
 - You are about to modify unrelated files.
 
@@ -210,6 +222,7 @@ Approved examples:
 - manifest systems
 - adapter layers
 - quality evaluation
+- regeneration loop prevention
 
 Still blocked:
 
