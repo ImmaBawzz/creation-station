@@ -69,15 +69,22 @@ Image-to-video work is allowed only under a narrow, orchestration-first scope:
 
 Still blocked until separate approval:
 
-- real WAN execution
 - real LTX execution
-- real Kling execution
 - real Hunyuan execution
 - Flowframes interpolation
 - automatic custom node installs
 - uncontrolled video workflow imports
 
-Real video providers require a separate governance update and a dedicated validation branch before implementation.
+## Controlled Provider Runtime Scope
+
+Provider execution is allowed only under controlled scope rules:
+
+- The approved module boundary is `src/modules/provider-runtime/`.
+- The module is responsible for: provider authentication, provider adapters, job execution, polling, cancellation, retries, failure normalization, cost tracking, and provider health monitoring.
+- Approved real providers: ComfyUI, WAN, Kling, Runway.
+- `src/modules/video-generation/` remains orchestration-only.
+- `src/modules/provider-runtime/` becomes execution-only.
+- Preserve stability-first architecture principles.
 
 ## Controlled Quality Director Scope
 
@@ -202,8 +209,8 @@ Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
 - More than 5 files need changes for one task, unless the work is a pre-approved orchestration milestone within the existing architecture and satisfies every orchestration exception rule below.
-- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, the controlled `src/modules/regeneration-governor/` loop-prevention scope, and the controlled `src/modules/creative-strategy/` advisory analysis scope.
-- A requested video-generation change attempts real provider execution, custom node expansion, or any unapproved integration surface beyond the mock-provider orchestration boundary.
+- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, the controlled `src/modules/regeneration-governor/` loop-prevention scope, the controlled `src/modules/creative-strategy/` advisory analysis scope, and the controlled `src/modules/provider-runtime/` execution-only scope.
+- A requested video-generation change attempts unapproved real provider execution, custom node expansion, or any unapproved integration surface beyond the `src/modules/provider-runtime/` boundary.
 - You are about to modify unrelated files.
 
 ## Controlled Multi-File Orchestration Exception
@@ -237,6 +244,7 @@ Approved examples:
 - quality evaluation
 - regeneration loop prevention
 - creative strategy
+- provider runtime execution
 
 Still blocked:
 
