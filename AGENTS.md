@@ -103,6 +103,19 @@ Regeneration loop prevention is allowed only under controlled scope rules:
 - No external service calls are allowed.
 - Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
 
+## Controlled Creative Strategy Scope
+
+Creative strategy analysis is allowed only under controlled scope rules:
+
+- The approved module boundary is `src/modules/creative-strategy/`.
+- The creative strategy module must remain read-only advisory analysis of existing manifests and song data.
+- It must not modify upstream manifests, database models, or pipeline outputs.
+- Output is limited to `creativeStrategyReport.json` written to `projects/[id]/quality/`.
+- Downstream modules (scene planner, timeline director) may optionally consume the advisory report.
+- No new npm dependencies are allowed.
+- No external service calls are allowed.
+- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
+
 ## Allowed Work
 
 You may:
@@ -189,7 +202,7 @@ Stop immediately if:
 - The app no longer starts.
 - Prisma schema and database drift become unclear.
 - More than 5 files need changes for one task, unless the work is a pre-approved orchestration milestone within the existing architecture and satisfies every orchestration exception rule below.
-- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, and the controlled `src/modules/regeneration-governor/` loop-prevention scope.
+- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, the controlled `src/modules/regeneration-governor/` loop-prevention scope, and the controlled `src/modules/creative-strategy/` advisory analysis scope.
 - A requested video-generation change attempts real provider execution, custom node expansion, or any unapproved integration surface beyond the mock-provider orchestration boundary.
 - You are about to modify unrelated files.
 
@@ -223,6 +236,7 @@ Approved examples:
 - adapter layers
 - quality evaluation
 - regeneration loop prevention
+- creative strategy
 
 Still blocked:
 
