@@ -52,6 +52,7 @@ export type SceneVideoJobResult = {
   completedAt?: string;
   error?: string;
   placeholderVideoId?: string;
+  providerMetadata?: Record<string, unknown>;
   sceneId: string;
   startedAt?: string;
   status: SceneVideoJobStatus;

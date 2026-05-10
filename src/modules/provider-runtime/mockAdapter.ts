@@ -1,5 +1,6 @@
 import { runMockSceneVideoJob } from "@/modules/video-generation/mockProvider";
-import { getPrimaryReferenceAssetPath } from "./types";
+import { mapCanonicalPayloadToMock } from "./payloadMappers";
+import { ProviderError } from "./types";
 import type { ProviderAdapter, ProviderHealthState, ProviderJobRequest, ProviderJobResult } from "./types";
 import type { SceneVideoState } from "@/modules/video-generation/types";
 
@@ -15,7 +16,7 @@ export const mockAdapter: ProviderAdapter = {
     return true; // Mock is always valid
   },
 
-  estimateCost(_job: ProviderJobRequest): number {
+  estimateCost(): number {
     return 0; // Mock is free
   },
 
@@ -24,8 +25,13 @@ export const mockAdapter: ProviderAdapter = {
   },
 
   async submitJob(projectId: string, job: ProviderJobRequest): Promise<string> {
+    const mapping = mapCanonicalPayloadToMock(job);
+
+    if (!mapping.ok) {
+      throw new ProviderError(mapping.message, "validation_error", "mock", "medium", false);
+    }
+
     const mockJobId = `mock-job-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const sourceImage = getPrimaryReferenceAssetPath(job) ?? "";
     
     const mockJob: SceneVideoState["jobs"][number] = {
       cameraDirection: job.cameraDirection ?? "none",
@@ -36,7 +42,7 @@ export const mockAdapter: ProviderAdapter = {
       provider: job.provider,
       referenceAssets: job.referenceAssets ?? [],
       sceneId: job.sceneId,
-      sourceImage,
+      sourceImage: mapping.payload.primaryImage,
       startedAt: job.startedAt,
       status: "running",
     };
@@ -47,6 +53,10 @@ export const mockAdapter: ProviderAdapter = {
       completedAt: result.completedAt,
       error: result.error,
       placeholderVideoId: result.placeholderVideoId,
+      providerMetadata: {
+        canonicalPayload: mapping.payload.canonicalPayload,
+        mapperWarnings: mapping.warnings,
+      },
       sceneId: result.sceneId,
       startedAt: result.startedAt,
     }));

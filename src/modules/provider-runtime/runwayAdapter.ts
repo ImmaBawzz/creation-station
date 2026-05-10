@@ -1,3 +1,5 @@
+import { mapCanonicalPayloadToRunway } from "./payloadMappers";
+import { ProviderError } from "./types";
 import type { ProviderAdapter, ProviderHealthState, ProviderJobRequest, ProviderJobResult } from "./types";
 
 export const runwayAdapter: ProviderAdapter = {
@@ -9,7 +11,7 @@ export const runwayAdapter: ProviderAdapter = {
     return enabled && !!apiKey;
   },
 
-  estimateCost(_job: ProviderJobRequest): number {
+  estimateCost(): number {
     return 0.20; // Placeholder cost
   },
 
@@ -18,12 +20,19 @@ export const runwayAdapter: ProviderAdapter = {
     return "unknown"; 
   },
 
-  async submitJob(_projectId: string, _job: ProviderJobRequest): Promise<string> {
+  async submitJob(_projectId: string, job: ProviderJobRequest): Promise<string> {
+    void _projectId;
+    const mapping = mapCanonicalPayloadToRunway(job);
+
+    if (!mapping.ok) {
+      throw new ProviderError(mapping.message, "validation_error", "runway", "medium", false);
+    }
+
     if (!this.validateConfig()) throw new Error("Runway adapter not properly configured or enabled.");
     throw new Error("Runway adapter submitJob not yet fully implemented.");
   },
 
-  async pollJob(_projectId: string, _jobId: string): Promise<ProviderJobResult> {
+  async pollJob(): Promise<ProviderJobResult> {
     throw new Error("Runway adapter pollJob not yet fully implemented.");
   }
 };

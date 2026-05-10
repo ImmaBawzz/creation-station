@@ -1,3 +1,5 @@
+import { mapCanonicalPayloadToWan } from "./payloadMappers";
+import { ProviderError } from "./types";
 import type { ProviderAdapter, ProviderHealthState, ProviderJobRequest, ProviderJobResult } from "./types";
 
 export const wanAdapter: ProviderAdapter = {
@@ -9,7 +11,7 @@ export const wanAdapter: ProviderAdapter = {
     return enabled && !!apiKey;
   },
 
-  estimateCost(_job: ProviderJobRequest): number {
+  estimateCost(): number {
     return 0.10; // Placeholder cost
   },
 
@@ -18,12 +20,19 @@ export const wanAdapter: ProviderAdapter = {
     return "unknown"; 
   },
 
-  async submitJob(_projectId: string, _job: ProviderJobRequest): Promise<string> {
+  async submitJob(_projectId: string, job: ProviderJobRequest): Promise<string> {
+    void _projectId;
+    const mapping = mapCanonicalPayloadToWan(job);
+
+    if (!mapping.ok) {
+      throw new ProviderError(mapping.message, "validation_error", "wan", "medium", false);
+    }
+
     if (!this.validateConfig()) throw new Error("WAN adapter not properly configured or enabled.");
     throw new Error("WAN adapter submitJob not yet fully implemented.");
   },
 
-  async pollJob(_projectId: string, _jobId: string): Promise<ProviderJobResult> {
+  async pollJob(): Promise<ProviderJobResult> {
     throw new Error("WAN adapter pollJob not yet fully implemented.");
   }
 };

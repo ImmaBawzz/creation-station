@@ -346,6 +346,7 @@ export type ProviderJobResult = {
   startedAt?: string;
   error?: string;
   placeholderVideoId?: string;
+  providerMetadata?: Record<string, unknown>;
   sceneId: string;
 };
 

@@ -19,6 +19,13 @@ import { getProviderHealth, setProviderHealth } from "./providerHealth";
 import { getProjectCostSummary } from "./costTracker";
 import { mockAdapter } from "./mockAdapter";
 import {
+  mapCanonicalPayloadToComfy,
+  mapCanonicalPayloadToKling,
+  mapCanonicalPayloadToMock,
+  mapCanonicalPayloadToRunway,
+  mapCanonicalPayloadToWan,
+} from "./payloadMappers";
+import {
   normalizeLegacyGenerationPayload,
   validateBaseGenerationPayload,
   validateProviderJobRequest,
@@ -34,6 +41,23 @@ describe("Provider Runtime Core", () => {
     referenceAssets: [{ path: "img.png", role: "sourceImage" }],
     duration: 5,
     cameraDirection: "none",
+  };
+
+  const canonicalJob: ProviderJobRequest = {
+    ...dummyJob,
+    aspectRatio: "16:9",
+    audioSyncData: { bpm: 120, beats: [0, 0.5], cues: [{ label: "drop", time: 4 }] },
+    cameraDirection: "slow dolly forward",
+    fps: 24,
+    model: "provider-model",
+    motionIntensity: "medium",
+    negativePrompt: "blur",
+    providerMetadata: { providerMode: "test" },
+    resolution: { width: 1920, height: 1080 },
+    seed: 42,
+    subtitleData: { lines: [{ start: 0, end: 2, text: "hello" }] },
+    transitionType: "fade",
+    workflowId: "workflow-1",
   };
 
   describe("Canonical Generation Payload Contract", () => {
@@ -106,6 +130,135 @@ describe("Provider Runtime Core", () => {
         expect(typeof adapter.submitJob).toBe("function");
         expect(typeof adapter.pollJob).toBe("function");
       }
+    });
+  });
+
+  describe("Adapter Payload Mappers", () => {
+    it("maps canonical payload to Comfy payload", () => {
+      const result = mapCanonicalPayloadToComfy(canonicalJob);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload).toMatchObject({
+        imageInputs: ["img.png"],
+        negativePrompt: "blur",
+        positivePrompt: "A cool cinematic shot",
+        samplerSeed: 42,
+        workflowId: "workflow-1",
+        width: 1920,
+        height: 1080,
+      });
+      expect(result.payload.workflowOverrides).toEqual({ providerMode: "test" });
+    });
+
+    it("maps canonical payload to WAN payload", () => {
+      const result = mapCanonicalPayloadToWan(canonicalJob);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload).toMatchObject({
+        cameraMotion: "slow dolly forward",
+        durationSeconds: 5,
+        fps: 24,
+        imageToVideoSource: "img.png",
+        outputResolution: { width: 1920, height: 1080 },
+        prompt: "A cool cinematic shot",
+      });
+      expect(result.payload.providerOptions).toMatchObject({ providerMode: "test", motionIntensity: "medium" });
+    });
+
+    it("maps canonical payload to Kling payload", () => {
+      const result = mapCanonicalPayloadToKling(canonicalJob);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload).toMatchObject({
+        durationSeconds: 5,
+        prompt: "A cool cinematic shot",
+        startFrame: "img.png",
+      });
+      expect(result.payload.motionPrompt).toContain("slow dolly forward");
+      expect(result.payload.motionPrompt).toContain("motion intensity: medium");
+    });
+
+    it("maps canonical payload to Runway payload", () => {
+      const result = mapCanonicalPayloadToRunway(canonicalJob);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload).toMatchObject({
+        durationSeconds: 5,
+        fps: 24,
+        imageInput: "img.png",
+        outputResolution: { width: 1920, height: 1080 },
+        prompt: "A cool cinematic shot",
+      });
+      expect(result.payload.providerOptions).toEqual({ providerMode: "test" });
+    });
+
+    it("mock preserves all canonical fields in mapped metadata", async () => {
+      const mapped = mapCanonicalPayloadToMock(canonicalJob);
+
+      expect(mapped.ok).toBe(true);
+      if (!mapped.ok) return;
+      expect(mapped.payload.canonicalPayload).toMatchObject({
+        aspectRatio: "16:9",
+        cameraDirection: "slow dolly forward",
+        fps: 24,
+        model: "provider-model",
+        motionIntensity: "medium",
+        negativePrompt: "blur",
+        prompt: "A cool cinematic shot",
+        resolution: { width: 1920, height: 1080 },
+        seed: 42,
+        transitionType: "fade",
+        workflowId: "workflow-1",
+      });
+
+      const jobId = await mockAdapter.submitJob("mapper-project", { ...canonicalJob, provider: "mock" });
+      const result = await mockAdapter.pollJob("mapper-project", jobId);
+
+      expect(result.providerMetadata?.canonicalPayload).toMatchObject(mapped.payload.canonicalPayload);
+    });
+
+    it("missing reference asset fails safely", () => {
+      const result = mapCanonicalPayloadToWan({ ...canonicalJob, referenceAssets: undefined });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.errorCode).toBe("provider_missing_reference_asset");
+      expect(result.message).toContain("provider_missing_reference_asset");
+    });
+
+    it("unsupported optional canonical fields warn without crashing", () => {
+      const result = mapCanonicalPayloadToRunway(canonicalJob);
+
+      expect(result.ok).toBe(true);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings.join(" ")).toContain("audioSyncData");
+    });
+
+    it("legacy payload still maps through compatibility layer before adapter mapping", () => {
+      const normalized = normalizeLegacyGenerationPayload({
+        duration: 5,
+        motionPrompt: "legacy prompt",
+        motionType: "cinematic-drift",
+        sourceImage: "legacy-img.png",
+      });
+      const result = mapCanonicalPayloadToWan({
+        ...normalized,
+        id: "legacy-job",
+        provider: "wan",
+        sceneId: "legacy-scene",
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload).toMatchObject({
+        cameraMotion: "cinematic-drift",
+        imageToVideoSource: "legacy-img.png",
+        prompt: "legacy prompt",
+      });
     });
   });
 

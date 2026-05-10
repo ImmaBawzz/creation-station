@@ -68,6 +68,7 @@ function mergeJobResult(state: SceneVideoState, result: SceneVideoJobResult): Sc
           completedAt: result.completedAt,
           error: result.error,
           placeholderVideoId: result.placeholderVideoId,
+          providerMetadata: result.providerMetadata,
           startedAt: result.startedAt ?? job.startedAt,
           status: result.status,
         }
