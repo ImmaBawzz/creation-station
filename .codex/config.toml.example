@@ -1,0 +1,24 @@
+# Copy this to ~/.codex/config.toml or adapt it as a project-specific Codex profile.
+# Do not use danger-full-access for autonomous repository loops.
+
+[profiles.autonomous_repo_loop]
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+allow_login_shell = false
+
+[profiles.review_only]
+approval_policy = "never"
+sandbox_mode = "read-only"
+web_search = "cached"
+allow_login_shell = false
+
+# Use only in isolated CI/container environments when dependency installation or live docs are required.
+[profiles.autonomous_isolated_network]
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+web_search = "live"
+allow_login_shell = false
+
+[profiles.autonomous_isolated_network.sandbox_workspace_write]
+network_access = true

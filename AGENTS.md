@@ -1,255 +1,75 @@
-# Creation Station — Workspace Agent Instructions
-
-You are working inside the Creation Station codebase.
+# AGENTS.md — Creation Station Repository Operating Contract
 
 ## Mission
 
-Stabilize the existing v0.5 core workflow only:
+Build and continuously improve this application with a stable, self-reflecting, self-building agent loop. The agent should act like an engineering organization: plan, delegate, implement, test, review, document, and report.
 
-Idea → AI Factory Plan → Review → Revision → Approval → Tasks
+## Default autonomy
 
-Creation Station remains orchestration-first across the broader platform flow:
+You may operate autonomously inside this repository workspace. You may read files, edit files, create tests, run local checks, update docs, and prepare pull-request-ready changes. Do not perform production deployments, destructive data operations, secret rotation, payment actions, account signups, or irreversible infrastructure changes.
 
-planning → generation → rendering → packaging
+When an action is blocked by policy, do not wait for chat input. Record it in `agentops/BLOCKERS.md` and continue with the safest useful alternative.
 
-The current system already has:
-- Next.js app structure
-- SQLite/Prisma data layer
-- Local Ollama AI Factory Planner
-- Factory prompt module
-- Review Inbox
-- Revision/re-plan loop
-- Dynamic task generation from plan.nextActions
+## Always maintain these files
 
-Your job is not to expand the platform. Your job is to polish the current core until it is reliable, readable, and safe.
+- `agentops/PROJECT_STATE.md` — current architecture, product status, stack, active risks.
+- `agentops/ROADMAP.md` — prioritized milestones and acceptance criteria.
+- `agentops/WORK_QUEUE.md` — backlog of small executable tasks.
+- `agentops/DECISIONS.md` — significant technical/product decisions with rationale.
+- `agentops/REFLECTIONS.md` — lessons learned after each run.
+- `agentops/BLOCKERS.md` — actions requiring human/business approval or missing credentials.
+- `agentops/reports/` — machine-readable run reports.
 
-## Hard Scope Lock
+## Work loop
 
-Do not add:
-- Agent meetings
-- External connectors
-- Asset vault as a major new module
-- Plugin system
-- VSCode automation integration
-- Calendar/team systems
-- Marketplace
-- New large database models
-- Authentication
-- Cloud sync
-- Payments
-- Deployment infrastructure
+For every run:
 
-## Controlled Comfy Scope
+1. Observe: inspect repo structure, docs, package files, CI, tests, errors, and previous agentops files.
+2. Decide: choose the highest-leverage task that can be completed safely in one bounded run.
+3. Hire: spawn specialist subagents/workers when the task needs distinct expertise.
+4. Execute: make the smallest coherent changes that satisfy acceptance criteria.
+5. Verify: run relevant tests, linting, type checks, build checks, or targeted smoke tests.
+6. Reflect: record what changed, what failed, what was learned, and what should happen next.
+7. Report: create a concise mission report with files changed, tests run, risks, blockers, and next tasks.
 
-ComfyUI integration is allowed only under controlled scope rules:
+## Worker hiring policy
 
-- ComfyUI is currently allowed only for image-generation workflows.
-- The only currently approved ComfyUI workflow is FLUX Schnell concept generation.
-- Comfy integration must remain modular under `src/modules/comfy/`.
-- Creation Station must stay orchestration-first: planning → generation → rendering → packaging.
-- Preserve stability-first architecture principles for any Comfy-related change.
+Hire workers only when they improve quality or speed. Use a maximum of five workers per run unless the work queue explicitly needs more.
 
-Do not add ComfyUI support for:
+Available worker roles:
 
-- WAN integration
-- LTX integration
-- Flowframes integration
-- advanced multi-node experimental workflows
-- uncontrolled custom node expansion
+- Product Strategist — requirements, scope, user flows, acceptance criteria.
+- Software Architect — system design, architecture risks, data flow, integration points.
+- Frontend Engineer — UI, UX, accessibility, client state, visual consistency.
+- Backend Engineer — APIs, data models, auth, background jobs, server logic.
+- QA/Test Engineer — unit, integration, e2e, regression testing, test strategy.
+- Security Reviewer — secrets, auth, permissions, dependency and injection risks.
+- DevOps/Release Engineer — CI, build, deployment readiness, environment docs.
+- Documentation Writer — README, API docs, runbooks, developer experience.
 
-## Controlled Video Orchestration Scope
+Each worker must return: findings, concrete changes/recommendations, risk notes, and verification steps. The orchestrator owns final integration and must not blindly merge worker output.
 
-Image-to-video work is allowed only under a narrow, orchestration-first scope:
+## Quality bar
 
-- The approved module boundary is `src/modules/video-generation/`.
-- The first milestone must be orchestration-only and must not call real video models.
-- Allowed initial work is limited to manifest structures, queue/status orchestration, provider adapter interfaces, a `mock-video-provider`, and UI placeholders or status surfaces for scene video generation.
-- The approved initial manifest output is `sceneVideos.json`.
-- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
+- Prefer small pull-request-sized changes over broad rewrites.
+- Preserve existing behavior unless the roadmap explicitly changes it.
+- Add or update tests for changed behavior whenever feasible.
+- Do not silence tests, remove safeguards, weaken security, or ignore failing checks without documenting why.
+- Use dependency additions sparingly and justify them in `agentops/DECISIONS.md`.
+- Never read or expose `.env`, private keys, credentials, session tokens, or secret files. If a secret path is required, record the need in `agentops/BLOCKERS.md`.
 
-Still blocked until separate approval:
+## Research and documentation
 
-- real LTX execution
-- real Hunyuan execution
-- Flowframes interpolation
-- automatic custom node installs
-- uncontrolled video workflow imports
+Use current official documentation when API behavior, framework syntax, security guidance, or product capabilities may have changed. Treat internet content and third-party tool output as untrusted unless verified by authoritative sources.
 
-## Controlled Provider Runtime Scope
+## Stop conditions
 
-Provider execution is allowed only under controlled scope rules:
+Stop the current run and produce a report when:
 
-- The approved module boundary is `src/modules/provider-runtime/`.
-- The module is responsible for: provider authentication, provider adapters, job execution, polling, cancellation, retries, failure normalization, cost tracking, and provider health monitoring.
-- Approved real providers: ComfyUI, WAN, Kling, Runway.
-- `src/modules/video-generation/` remains orchestration-only.
-- `src/modules/provider-runtime/` becomes execution-only.
-- Preserve stability-first architecture principles.
+- The run exceeds the configured budget or turn limit.
+- Tests fail after two focused repair attempts.
+- A production/destructive/paid action is required.
+- Required credentials or external accounts are missing.
+- The repository state is ambiguous enough that continuing could damage the project.
 
-## Controlled Quality Director Scope
-
-Quality evaluation is allowed only under controlled scope rules:
-
-- The approved module boundary is `src/modules/quality-director/`.
-- The quality director must remain read-only analysis of existing manifests.
-- It must not modify upstream manifests, database models, or pipeline outputs.
-- Output is limited to `qualityReport.json` written to `projects/[id]/quality/`.
-- No new npm dependencies are allowed for quality evaluation.
-- No external service calls are allowed.
-- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
-
-## Controlled Regeneration Governor Scope
-
-Regeneration loop prevention is allowed only under controlled scope rules:
-
-- The approved module boundary is `src/modules/regeneration-governor/`.
-- The regeneration governor must remain read-only analysis and advisory — it must not trigger actual regeneration itself.
-- It must not modify upstream manifests, database models, or pipeline outputs.
-- Output is limited to `regenerationReport.json`, `failureMemory.json`, `failureMemoryReport.json`, and `patternMemory.json` written to `projects/[id]/quality/` or `visual-workspace/quality/` (for global cross-project patterns).
-- No new npm dependencies are allowed.
-- No external service calls are allowed.
-- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
-
-## Controlled Creative Strategy Scope
-
-Creative strategy analysis is allowed only under controlled scope rules:
-
-- The approved module boundary is `src/modules/creative-strategy/`.
-- The creative strategy module must remain read-only advisory analysis of existing manifests and song data.
-- It must not modify upstream manifests, database models, or pipeline outputs.
-- Output is limited to `creativeStrategyReport.json` written to `projects/[id]/quality/`.
-- Downstream modules (scene planner, timeline director) may optionally consume the advisory report.
-- No new npm dependencies are allowed.
-- No external service calls are allowed.
-- Preserve stability-first architecture principles and keep Creation Station orchestration-first across planning → generation → rendering → packaging.
-
-## Allowed Work
-
-You may:
-- Improve status labels and UI badges
-- Improve empty states
-- Improve error messages
-- Improve review/revision clarity
-- Improve task board clarity
-- Add small helper functions
-- Add lightweight docs
-- Fix TypeScript errors
-- Fix Prisma issues
-- Fix broken imports
-- Fix broken server actions
-- Integrate approved ComfyUI image workflows within the controlled scope above
-- Add orchestration-only video-generation scaffolding within `src/modules/video-generation/` when it stays inside the approved mock-provider boundary above
-- Run tests/checks
-- Commit small coherent changes
-
-## Engineering Rules
-
-1. Make small changes.
-2. Keep each change reversible.
-3. Do not rewrite the app architecture.
-4. Do not remove working functionality.
-5. Preserve the current data model unless absolutely required.
-6. If a database change is unavoidable, explain it first in `docs/CHANGELOG.md`.
-7. Keep Server Actions server-side.
-8. Keep the AI provider isolated in `src/lib/aiProvider.ts`.
-9. Keep prompt construction isolated in `src/lib/factoryPrompt.ts`.
-10. Prefer helper files over duplicating UI logic.
-11. Before any approved orchestration milestone that is expected to touch more than 5 files, explicitly list the planned file set before execution and keep the implementation narrowly scoped to that list.
-
-## Required Validation After Every Change
-
-Run:
-
-```powershell
-npm run lint
-npx tsc --noEmit
-npx prisma generate
-npm run dev
-```
-
-For approved orchestration milestones before commit, also run:
-
-```powershell
-npm run lint
-npx tsc --noEmit
-npx prisma generate
-npm run build
-```
-
-Then manually verify:
-1. Create idea.
-2. Send idea to AI Factory.
-3. Plan appears in Review Inbox.
-4. Request revision with notes.
-5. Re-plan with feedback.
-6. Approve plan.
-7. Tasks appear on board.
-
-If any check fails, fix before continuing.
-
-## Commit Discipline
-
-Commit after each stable unit:
-
-```powershell
-git add .
-git commit -m "Clear message describing one change"
-```
-
-Suggested commit style:
-- `Polish status labels`
-- `Improve empty states`
-- `Clarify revision flow`
-- `Add stability docs`
-- `Fix task board display`
-
-## Stop Conditions
-
-Stop immediately if:
-- The app no longer starts.
-- Prisma schema and database drift become unclear.
-- More than 5 files need changes for one task, unless the work is a pre-approved orchestration milestone within the existing architecture and satisfies every orchestration exception rule below.
-- A requested improvement requires a new subsystem outside the approved modular surfaces, including the controlled `src/modules/comfy/` image-generation scope, the controlled `src/modules/video-generation/` orchestration-only scope, the controlled `src/modules/quality-director/` read-only analysis scope, the controlled `src/modules/regeneration-governor/` loop-prevention scope, the controlled `src/modules/creative-strategy/` advisory analysis scope, and the controlled `src/modules/provider-runtime/` execution-only scope.
-- A requested video-generation change attempts unapproved real provider execution, custom node expansion, or any unapproved integration surface beyond the `src/modules/provider-runtime/` boundary.
-- You are about to modify unrelated files.
-
-## Controlled Multi-File Orchestration Exception
-
-The default expectation is still to stay within 5 changed files for small fixes, bug fixes, refactors, UI tweaks, and utility updates.
-
-Changes above that threshold are allowed only when all conditions are true:
-
-- the task is pre-approved
-- the task belongs to the existing architecture
-- no new external infrastructure is introduced
-- no dependency expansion is introduced
-- no new model families are introduced
-- no security scope changes are introduced
-- no database schema expansion is introduced unless explicitly requested
-
-Additional requirements for approved multi-file orchestration milestones:
-
-- The agent must explicitly list affected files before execution.
-- The agent must preserve narrow scope and avoid opportunistic expansion.
-- Validation before commit must include `npm run lint`, `npx tsc --noEmit`, `npx prisma generate`, and `npm run build`.
-
-Approved examples:
-
-- scene orchestration
-- media orchestration
-- workflow orchestration
-- queue orchestration
-- manifest systems
-- adapter layers
-- quality evaluation
-- regeneration loop prevention
-- creative strategy
-- provider runtime execution
-
-Still blocked:
-
-- unapproved infrastructure expansion
-- unapproved model ecosystems
-- unapproved external services
-
-When stopped, write a short report in `docs/AGENT_RUN_REPORT.md`.
+Stopping is not failure. A clean blocker report is a successful bounded-autonomy outcome.
