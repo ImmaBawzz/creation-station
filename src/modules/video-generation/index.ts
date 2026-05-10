@@ -151,6 +151,7 @@ async function buildSceneVideoPlanState(projectId: string): Promise<SceneVideoSt
       motionPrompt: buildMotionPrompt(scene, motionType),
       motionType,
       provider: "mock",
+      referenceAssets: [{ path: asset.imagePath, role: "sourceImage" }],
       sceneId: scene.id,
       sourceImage: asset.imagePath,
       status: "pending",

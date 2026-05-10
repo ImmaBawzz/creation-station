@@ -1,19 +1,22 @@
-export type SceneVideoProvider = "mock" | "comfy" | "wan" | "kling" | "runway";
+import type { BaseGenerationPayload, GenerationReferenceAsset, ProviderType } from "@/modules/provider-runtime/types";
+
+export type SceneVideoProvider = ProviderType;
 
 export type SceneVideoJobStatus = "pending" | "running" | "completed" | "failed";
 export type SceneVideoStateStatus = "idle" | "running" | "paused" | "completed" | "failed";
 export type SceneVideoMotionType = "cinematic-drift" | "steady-hold" | "pulse-cut";
 
-export type SceneVideoJob = {
-  cameraDirection: string;
+export type SceneVideoJob = Required<Pick<BaseGenerationPayload, "cameraDirection" | "duration">> & {
   completedAt?: string;
-  duration: number;
   error?: string;
   id: string;
   motionPrompt: string;
   motionType: SceneVideoMotionType;
   placeholderVideoId?: string;
   provider: SceneVideoProvider;
+  providerJobId?: string;
+  attemptCount?: number;
+  referenceAssets?: GenerationReferenceAsset[];
   sceneId: string;
   sourceImage: string;
   startedAt?: string;

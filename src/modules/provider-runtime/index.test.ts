@@ -1,11 +1,28 @@
-import { describe, it, expect } from "vitest";
-import { executeProviderJob } from "./jobExecutor";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/modules/video-generation/mockProvider", () => ({
+  runMockSceneVideoJob: vi.fn().mockImplementation(async (projectId, job) => {
+    return {
+      status: "completed",
+      completedAt: new Date().toISOString(),
+      placeholderVideoId: `mock-${job.id}`,
+      sceneId: job.sceneId,
+      startedAt: job.startedAt,
+    };
+  }),
+}));
+import { submitProviderJob, pollProviderJob } from "./jobExecutor";
 import { getProviderAdapter } from "./providerRegistry";
 import { normalizeError } from "./failureNormalizer";
 import { checkRateLimit } from "./rateLimiter";
 import { getProviderHealth, setProviderHealth } from "./providerHealth";
 import { getProjectCostSummary } from "./costTracker";
 import { mockAdapter } from "./mockAdapter";
+import {
+  normalizeLegacyGenerationPayload,
+  validateBaseGenerationPayload,
+  validateProviderJobRequest,
+} from "./types";
 import type { ProviderJobRequest, ProviderError, ProviderType } from "./types";
 
 describe("Provider Runtime Core", () => {
@@ -14,10 +31,68 @@ describe("Provider Runtime Core", () => {
     sceneId: "scene-1",
     provider: "comfy",
     prompt: "A cool cinematic shot",
-    sourceImage: "img.png",
+    referenceAssets: [{ path: "img.png", role: "sourceImage" }],
     duration: 5,
-    motionType: "cinematic-drift",
+    cameraDirection: "none",
   };
+
+  describe("Canonical Generation Payload Contract", () => {
+    it("accepts all supported generation payload fields", () => {
+      const errors = validateBaseGenerationPayload({
+        aspectRatio: "16:9",
+        audioSyncData: { bpm: 120, beats: [0, 0.5], cues: [{ label: "drop", time: 4 }] },
+        cameraDirection: "slow dolly",
+        duration: 5,
+        fps: 24,
+        model: "provider-model",
+        motionIntensity: "medium",
+        negativePrompt: "blur",
+        prompt: "A cinematic scene",
+        providerMetadata: { providerMode: "test" },
+        referenceAssets: [{ path: "img.png", role: "sourceImage" }],
+        resolution: { width: 1920, height: 1080 },
+        seed: 42,
+        subtitleData: { lines: [{ start: 0, end: 2, text: "hello" }] },
+        transitionType: "fade",
+        workflowId: "workflow-1",
+      });
+
+      expect(errors).toEqual([]);
+    });
+
+    it("rejects unsupported generation payload fields", () => {
+      const errors = validateBaseGenerationPayload({
+        duration: 5,
+        prompt: "A cinematic scene",
+        sourceImage: "legacy-img.png",
+      });
+
+      expect(errors).toContain("Unsupported generation payload field: sourceImage");
+    });
+
+    it("validates ProviderJobRequest against the same canonical payload schema", () => {
+      expect(validateProviderJobRequest(dummyJob)).toEqual([]);
+      expect(validateProviderJobRequest({ ...dummyJob, motionType: "legacy-motion" })).toContain(
+        "Unsupported provider job request field: motionType",
+      );
+    });
+
+    it("maps legacy payloads to canonical reference assets", () => {
+      const normalized = normalizeLegacyGenerationPayload({
+        duration: 5,
+        motionPrompt: "legacy prompt",
+        motionType: "cinematic-drift",
+        sourceImage: "legacy-img.png",
+      });
+
+      expect(normalized).toMatchObject({
+        cameraDirection: "cinematic-drift",
+        prompt: "legacy prompt",
+        referenceAssets: [{ path: "legacy-img.png", role: "sourceImage" }],
+      });
+      expect(validateBaseGenerationPayload(normalized)).toEqual([]);
+    });
+  });
 
   describe("Adapter Contract Consistency", () => {
     it("all adapters implement the full contract", () => {
@@ -35,16 +110,16 @@ describe("Provider Runtime Core", () => {
   });
 
   describe("Duplicate Job Prevention", () => {
-    it("prevents double execution of the same sceneId", async () => {
+    it("prevents double execution of the same sceneId submit", async () => {
       // Execute the same job twice concurrently
-      const promise1 = executeProviderJob("test-project", { ...dummyJob, provider: "mock" });
-      const promise2 = executeProviderJob("test-project", { ...dummyJob, provider: "mock" });
+      const promise1 = submitProviderJob("test-project", { ...dummyJob, provider: "mock" });
+      const promise2 = submitProviderJob("test-project", { ...dummyJob, provider: "mock" });
       
       expect(promise1).toBe(promise2); // Same promise reference
       
-      const [res1, res2] = await Promise.all([promise1, promise2]);
-      expect(res1.status).toBe("completed");
-      expect(res2.status).toBe("completed");
+      const [id1, id2] = await Promise.all([promise1, promise2]);
+      expect(typeof id1).toBe("string");
+      expect(id1).toBe(id2);
     });
   });
 
@@ -74,7 +149,10 @@ describe("Provider Runtime Core", () => {
   describe("Health Scoring & Fallback", () => {
     it("falls back to mock if provider is offline or missing config", async () => {
       // By default, comfy doesn't have process.env.COMFY_API_URL in tests
-      const result = await executeProviderJob("fallback-proj", dummyJob);
+      const providerJobId = await submitProviderJob("fallback-proj", dummyJob);
+      expect(typeof providerJobId).toBe("string");
+      
+      const result = await pollProviderJob("fallback-proj", dummyJob, providerJobId);
       expect(result.status).toBe("completed");
       expect(result.placeholderVideoId).toMatch(/^mock-/);
     });

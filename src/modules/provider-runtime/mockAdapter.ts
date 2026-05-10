@@ -1,4 +1,5 @@
 import { runMockSceneVideoJob } from "@/modules/video-generation/mockProvider";
+import { getPrimaryReferenceAssetPath } from "./types";
 import type { ProviderAdapter, ProviderHealthState, ProviderJobRequest, ProviderJobResult } from "./types";
 import type { SceneVideoState } from "@/modules/video-generation/types";
 
@@ -24,13 +25,21 @@ export const mockAdapter: ProviderAdapter = {
 
   async submitJob(projectId: string, job: ProviderJobRequest): Promise<string> {
     const mockJobId = `mock-job-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const sourceImage = getPrimaryReferenceAssetPath(job) ?? "";
     
     const mockJob: SceneVideoState["jobs"][number] = {
-      ...job,
-      cameraDirection: "none",
+      cameraDirection: job.cameraDirection ?? "none",
+      duration: job.duration,
+      id: job.id,
       motionPrompt: job.prompt,
-      status: "running"
-    } as unknown as SceneVideoState["jobs"][number];
+      motionType: "steady-hold",
+      provider: job.provider,
+      referenceAssets: job.referenceAssets ?? [],
+      sceneId: job.sceneId,
+      sourceImage,
+      startedAt: job.startedAt,
+      status: "running",
+    };
     
     // Start it and store the promise
     const promise = runMockSceneVideoJob(projectId, mockJob).then(result => ({
