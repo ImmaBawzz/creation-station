@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 vi.mock("@/modules/video-generation/mockProvider", () => ({
   runMockSceneVideoJob: vi.fn().mockImplementation(async (projectId, job) => {
@@ -26,11 +26,17 @@ import {
   mapCanonicalPayloadToWan,
 } from "./payloadMappers";
 import {
+  getProviderReadiness,
+  inspectProviderPayload,
+} from "./readiness";
+import {
   normalizeLegacyGenerationPayload,
   validateBaseGenerationPayload,
   validateProviderJobRequest,
 } from "./types";
 import type { ProviderJobRequest, ProviderError, ProviderType } from "./types";
+
+const ORIGINAL_ENV = { ...process.env };
 
 describe("Provider Runtime Core", () => {
   const dummyJob: ProviderJobRequest = {
@@ -59,6 +65,23 @@ describe("Provider Runtime Core", () => {
     transitionType: "fade",
     workflowId: "workflow-1",
   };
+
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    delete process.env.PROVIDER_RUNTIME_EXECUTION_MODE;
+    delete process.env.PROVIDER_RUNTIME_ENABLE_COMFY;
+    delete process.env.PROVIDER_RUNTIME_ENABLE_WAN;
+    delete process.env.PROVIDER_RUNTIME_ENABLE_KLING;
+    delete process.env.PROVIDER_RUNTIME_ENABLE_RUNWAY;
+    delete process.env.COMFY_API_URL;
+    delete process.env.WAN_API_KEY;
+    delete process.env.KLING_API_KEY;
+    delete process.env.RUNWAY_API_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
 
   describe("Canonical Generation Payload Contract", () => {
     it("accepts all supported generation payload fields", () => {
@@ -262,6 +285,130 @@ describe("Provider Runtime Core", () => {
     });
   });
 
+  describe("Provider Readiness Gates", () => {
+    it("mock is executionReady by default", () => {
+      expect(getProviderReadiness("mock")).toMatchObject({
+        canExecute: true,
+        executionMode: "disabled",
+        readinessLevel: "executionReady",
+      });
+    });
+
+    it("Comfy is disabled by default", () => {
+      const readiness = getProviderReadiness("comfy");
+
+      expect(readiness).toMatchObject({
+        canExecute: false,
+        executionMode: "disabled",
+        readinessLevel: "inspectable",
+      });
+      expect(readiness.missingRequirements).toContain("PROVIDER_RUNTIME_EXECUTION_MODE");
+    });
+
+    it("Comfy can become executionReady with COMFY_API_URL and enable flag", () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.PROVIDER_RUNTIME_ENABLE_COMFY = "true";
+      process.env.COMFY_API_URL = "http://127.0.0.1:8188";
+
+      expect(getProviderReadiness("comfy")).toMatchObject({
+        canExecute: true,
+        executionMode: "execute",
+        readinessLevel: "executionReady",
+      });
+    });
+
+    it("WAN cannot execute without WAN_API_KEY", () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.PROVIDER_RUNTIME_ENABLE_WAN = "true";
+
+      const readiness = getProviderReadiness("wan");
+
+      expect(readiness.canExecute).toBe(false);
+      expect(readiness.missingRequirements).toContain("WAN_API_KEY");
+    });
+
+    it("Kling cannot execute without KLING_API_KEY", () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.PROVIDER_RUNTIME_ENABLE_KLING = "true";
+
+      const readiness = getProviderReadiness("kling");
+
+      expect(readiness.canExecute).toBe(false);
+      expect(readiness.missingRequirements).toContain("KLING_API_KEY");
+    });
+
+    it("Runway cannot execute without RUNWAY_API_KEY", () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.PROVIDER_RUNTIME_ENABLE_RUNWAY = "true";
+
+      const readiness = getProviderReadiness("runway");
+
+      expect(readiness.canExecute).toBe(false);
+      expect(readiness.missingRequirements).toContain("RUNWAY_API_KEY");
+    });
+
+    it("inspect mode returns mapped payload without submit", async () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "inspect";
+      const job = { ...canonicalJob, provider: "wan" as const };
+
+      const inspection = inspectProviderPayload(job);
+      expect(inspection.mappedPayload).toMatchObject({ imageToVideoSource: "img.png" });
+
+      const providerJobId = await submitProviderJob("inspect-project", job);
+      const result = await pollProviderJob("inspect-project", job, providerJobId);
+
+      expect(providerJobId).toMatch(/^inspect-wan-/);
+      expect(result.status).toBe("completed");
+      expect(result.providerMetadata?.readinessInspection).toMatchObject({
+        executionMode: "inspect",
+        providerId: "wan",
+      });
+    });
+
+    it("dry-run mode simulates execution without network", async () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "dry-run";
+      const job = { ...canonicalJob, provider: "kling" as const };
+
+      const providerJobId = await submitProviderJob("dry-run-project", job);
+      const result = await pollProviderJob("dry-run-project", job, providerJobId);
+
+      expect(providerJobId).toMatch(/^dry-run-kling-/);
+      expect(result.status).toBe("completed");
+      expect(result.placeholderVideoId).toBe("dry-run-scene-1");
+    });
+
+    it("execute mode still blocks provider if provider-specific flag is false", async () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.WAN_API_KEY = "test-key";
+
+      await expect(submitProviderJob("blocked-execute-project", { ...canonicalJob, provider: "wan" })).rejects.toMatchObject({
+        type: "provider_unavailable",
+      });
+    });
+
+    it("missing credentials return normalized error", async () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "execute";
+      process.env.PROVIDER_RUNTIME_ENABLE_RUNWAY = "true";
+
+      await expect(submitProviderJob("missing-creds-project", { ...canonicalJob, provider: "runway" })).rejects.toMatchObject({
+        type: "provider_unavailable",
+      });
+    });
+
+    it("video queue path respects readiness gate through dry-run submit and poll", async () => {
+      process.env.PROVIDER_RUNTIME_EXECUTION_MODE = "dry-run";
+      const job = { ...dummyJob, provider: "runway" as const };
+      const providerJobId = await submitProviderJob("video-queue-gate-project", job);
+      const result = await pollProviderJob("video-queue-gate-project", job, providerJobId);
+
+      expect(result.status).toBe("completed");
+      expect(result.providerMetadata?.readinessInspection).toMatchObject({
+        executionMode: "dry-run",
+        providerId: "runway",
+      });
+    });
+  });
+
   describe("Duplicate Job Prevention", () => {
     it("prevents double execution of the same sceneId submit", async () => {
       // Execute the same job twice concurrently
@@ -300,11 +447,10 @@ describe("Provider Runtime Core", () => {
   });
 
   describe("Health Scoring & Fallback", () => {
-    it("falls back to mock if provider is offline or missing config", async () => {
-      // By default, comfy doesn't have process.env.COMFY_API_URL in tests
+    it("preserves mock fallback when real providers are disabled", async () => {
       const providerJobId = await submitProviderJob("fallback-proj", dummyJob);
       expect(typeof providerJobId).toBe("string");
-      
+
       const result = await pollProviderJob("fallback-proj", dummyJob, providerJobId);
       expect(result.status).toBe("completed");
       expect(result.placeholderVideoId).toMatch(/^mock-/);

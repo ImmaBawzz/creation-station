@@ -33,6 +33,10 @@ export function normalizeError(error: unknown, provider: ProviderType): Provider
     type = "validation_error";
     shouldRetry = false;
     severity = "medium";
+  } else if (lowerMessage.includes("provider_unavailable")) {
+    type = "provider_unavailable";
+    shouldRetry = false;
+    severity = "medium";
   }
 
   return new ProviderError(message, type, provider, severity, shouldRetry);

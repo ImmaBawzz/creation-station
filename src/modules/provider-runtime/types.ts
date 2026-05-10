@@ -360,7 +360,7 @@ export interface ProviderAdapter {
   cancelJob?(projectId: string, jobId: string): Promise<void>;
 }
 
-export type ProviderErrorType = "rate_limit" | "auth_error" | "timeout" | "server_error" | "validation_error" | "unknown";
+export type ProviderErrorType = "rate_limit" | "auth_error" | "timeout" | "server_error" | "validation_error" | "provider_unavailable" | "unknown";
 export type ProviderErrorSeverity = "low" | "medium" | "high" | "critical";
 
 export class ProviderError extends Error {

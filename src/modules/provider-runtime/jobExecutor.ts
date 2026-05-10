@@ -4,11 +4,13 @@ import { trackCost } from "./costTracker";
 import { getProviderHealth, setProviderHealth } from "./providerHealth";
 import { normalizeError } from "./failureNormalizer";
 import type { ProviderJobRequest, ProviderJobResult, ProviderType, ProviderAdapter } from "./types";
-import { assertValidProviderJobRequest } from "./types";
+import { assertValidProviderJobRequest, ProviderError } from "./types";
+import { evaluateProviderGate } from "./readiness";
 
 // Active job registry: Map key is `${projectId}:${sceneId}`
 // We only use this to prevent double-submit if we somehow trigger submitJob twice.
 const activeSubmits = new Map<string, Promise<string>>();
+const readinessJobs = new Map<string, ProviderJobResult>();
 
 // Helper to determine the fallback provider
 function resolveFallbackProvider(): ProviderType {
@@ -42,6 +44,33 @@ export function submitProviderJob(projectId: string, job: ProviderJobRequest): P
 
   const executionPromise = (async () => {
     try {
+      const gate = evaluateProviderGate(job);
+
+      if (gate.action === "block") {
+        if (job.provider !== "mock" && gate.errorCode === "provider_unavailable" && gate.inspection.executionMode === "disabled") {
+          const fallbackAdapter = getProviderAdapter(resolveFallbackProvider());
+          await checkRateLimit(fallbackAdapter.providerId, projectId);
+          return await fallbackAdapter.submitJob(projectId, job);
+        }
+
+        throw new ProviderError(gate.message, gate.errorCode === "provider_unavailable" ? "provider_unavailable" : "validation_error", job.provider, "medium", false);
+      }
+
+      if (gate.action === "inspect" || gate.action === "dry-run") {
+        const providerJobId = `${gate.action}-${job.provider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        readinessJobs.set(providerJobId, {
+          completedAt: new Date().toISOString(),
+          placeholderVideoId: `${gate.action}-${job.sceneId}`,
+          providerMetadata: {
+            readinessInspection: gate.inspection,
+          },
+          sceneId: job.sceneId,
+          startedAt: job.startedAt,
+          status: "completed",
+        });
+        return providerJobId;
+      }
+
       const adapter = getAdapterWithFallback(job.provider);
       const targetProvider = adapter.providerId;
 
@@ -71,6 +100,12 @@ export function submitProviderJob(projectId: string, job: ProviderJobRequest): P
 
 export async function pollProviderJob(projectId: string, job: ProviderJobRequest, providerJobId: string): Promise<ProviderJobResult> {
   assertValidProviderJobRequest(job);
+
+  const readinessResult = readinessJobs.get(providerJobId);
+  if (readinessResult) {
+    readinessJobs.delete(providerJobId);
+    return readinessResult;
+  }
 
   const adapter = getAdapterWithFallback(job.provider);
   const targetProvider = adapter.providerId;
