@@ -1,6 +1,6 @@
 # Local Comfy Provider Certification Report
 
-Generated: 2026-05-10T20:32:31.484Z
+Generated: 2026-05-10T20:59:53.253Z
 
 ## Summary
 
@@ -17,7 +17,7 @@ COMFY_AUTO_START=false
 npm run certify:provider -- comfy
 ```
 
-Final status: `skipped_offline`
+Final status: `failed`
 
 Certified: `false`
 
@@ -72,13 +72,13 @@ Safety constraints:
 
 ## Health Result
 
-Status: `skipped`
+Status: `passed`
 
-Reason: `comfy_offline`
+Bootstrap status: `already_running`
 
-Observed error: `ComfyUI is unavailable at http://127.0.0.1:8188: fetch failed`
+Health endpoint: `/system_stats`
 
-Because local ComfyUI was offline, the certification runner did not attempt workflow submission, polling, or artifact retrieval.
+Local ComfyUI was already reachable at `http://127.0.0.1:8188`, so certification proceeded past bootstrap and health validation.
 
 ## Payload Inspection Result
 
@@ -100,45 +100,66 @@ The configured safe certification payload is:
 }
 ```
 
-Payload mapper coverage is validated by automated tests. Runtime payload inspection was not executed in this offline run because the health gate stopped the certification flow before workflow validation and dry-run preparation.
+Runtime payload inspection passed.
+
+Mapped payload summary:
+
+```json
+{
+  "workflowId": "flux-fast-concept",
+  "positivePrompt": "simple cinematic test frame, soft light, abstract geometric object, no text",
+  "negativePrompt": "text, watermark, logo, blurry, corrupted",
+  "width": 512,
+  "height": 512,
+  "samplerSeed": 12345,
+  "imageInputs": [],
+  "workflowOverrides": {}
+}
+```
+
+Inspection warnings:
+
+- `aspectRatio` is advisory for Comfy; `resolution` controls dimensions when provided.
+- `fps` is not mapped into current Comfy workflow stubs.
+- `motionIntensity` is not mapped into current Comfy workflow stubs.
 
 ## Dry-Run Result
 
-Status: not run
+Status: `passed`
 
-Reason: local ComfyUI health check returned `comfy_offline`.
+Workflow: `flux-fast-concept`
+
+Prepared prompt node count: `10`
 
 ## Certification Execution Result
 
-Status: skipped
+Status: `failed`
 
-Reason: `comfy_offline`
+Reason: `provider_timeout`
 
-No real image generation occurred.
+Submitted prompt timed out:
+
+```text
+ComfyUI job timed out: d60bec7c-cda2-4489-85da-301775586458
+```
+
+An automated local Comfy interrupt was attempted through `POST /interrupt` after the timeout. The endpoint returned without an error response.
 
 ## Artifact Validation Result
 
 Status: not run
 
-Reason: no provider artifact was created because certification execution was skipped.
+Reason: certification execution timed out before output retrieval.
 
 ## Final Certification Status
 
-`skipped_offline`
+`failed`
 
-This is an environment-state skip, not a source validation failure.
+This is a real local certification failure caused by `provider_timeout`. Comfy is not marked certified and Comfy is not production-default.
 
 ## Next Recommended Step
 
-Either start local ComfyUI externally at `http://127.0.0.1:8188`, or configure an explicit local bootstrap command outside source control:
-
-```powershell
-COMFY_AUTO_START=true
-COMFY_START_COMMAND=<local Comfy start command>
-COMFY_WORKDIR=<optional local Comfy directory>
-```
-
-Then rerun:
+Investigate why the safe `flux-fast-concept` certification workflow did not complete within the certification timeout, then rerun:
 
 ```powershell
 npm run certify:provider -- comfy
