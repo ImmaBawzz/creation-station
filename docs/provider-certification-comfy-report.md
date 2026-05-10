@@ -13,6 +13,7 @@ PROVIDER_RUNTIME_ENABLE_WAN=false
 PROVIDER_RUNTIME_ENABLE_KLING=false
 PROVIDER_RUNTIME_ENABLE_RUNWAY=false
 COMFY_API_URL=http://127.0.0.1:8188
+COMFY_AUTO_START=false
 npm run certify:provider -- comfy
 ```
 
@@ -22,6 +23,41 @@ Certified: `false`
 
 No WAN, Kling, or Runway execution was enabled.
 
+## Automated Bootstrap
+
+The Comfy certification runner now calls `bootstrapComfy()` before provider certification.
+
+Bootstrap checks `COMFY_API_URL`, then probes `/system_stats` and falls back to the provider-runtime Comfy health check. It only attempts to start Comfy when `COMFY_AUTO_START=true`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `COMFY_API_URL` | `http://127.0.0.1:8188` | Local Comfy endpoint to detect and certify. |
+| `COMFY_AUTO_START` | `false` | Enables automated local Comfy startup when offline. |
+| `COMFY_START_COMMAND` | empty | Shell command used to start Comfy when auto-start is enabled. |
+| `COMFY_WORKDIR` | empty | Optional working directory for the start command. |
+| `COMFY_STARTUP_TIMEOUT_MS` | `120000` | Maximum time to wait for Comfy to become healthy. |
+| `COMFY_HEALTHCHECK_INTERVAL_MS` | `3000` | Delay between startup health checks. |
+
+Bootstrap outcomes:
+
+| Status | Certification behavior |
+| --- | --- |
+| `already_running` | Proceed to Comfy certification. |
+| `started` | Proceed to Comfy certification after health passes. |
+| `skipped_autostart_disabled` | Report `skipped_offline`; no startup attempted. |
+| `missing_start_command` | Report `bootstrap_config_missing`; no startup attempted. |
+| `startup_timeout` | Report `comfy_startup_timeout`; certification fails safely. |
+| `startup_failed` | Report `comfy_startup_failed`; certification fails safely. |
+
+Safety constraints:
+
+- The bootstrap never runs unless `COMFY_AUTO_START=true`.
+- The bootstrap never kills existing Comfy processes.
+- The bootstrap never installs dependencies.
+- The bootstrap never mutates Comfy workflows.
+- The bootstrap does not log secrets and the report does not require committing local machine paths.
+- WAN, Kling, and Runway remain disabled during Comfy certification.
+
 ## Readiness State
 
 | Check | Result |
@@ -30,6 +66,7 @@ No WAN, Kling, or Runway execution was enabled.
 | Payload mapper | Present |
 | Provider registry | Includes `comfy` |
 | Comfy URL | `http://127.0.0.1:8188` |
+| Comfy auto-start | `false` for the recorded run |
 | Execution mode | `certify` |
 | Comfy enable flag | `true` for this certification process only |
 
@@ -93,7 +130,15 @@ This is an environment-state skip, not a source validation failure.
 
 ## Next Recommended Step
 
-Start local ComfyUI externally at `http://127.0.0.1:8188`, then rerun:
+Either start local ComfyUI externally at `http://127.0.0.1:8188`, or configure an explicit local bootstrap command outside source control:
+
+```powershell
+COMFY_AUTO_START=true
+COMFY_START_COMMAND=<local Comfy start command>
+COMFY_WORKDIR=<optional local Comfy directory>
+```
+
+Then rerun:
 
 ```powershell
 npm run certify:provider -- comfy

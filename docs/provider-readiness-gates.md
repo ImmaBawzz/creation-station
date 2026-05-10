@@ -51,6 +51,11 @@ PROVIDER_RUNTIME_ENABLE_KLING=false
 PROVIDER_RUNTIME_ENABLE_RUNWAY=false
 
 COMFY_API_URL=http://127.0.0.1:8188
+COMFY_AUTO_START=false
+COMFY_START_COMMAND=
+COMFY_WORKDIR=
+COMFY_STARTUP_TIMEOUT_MS=120000
+COMFY_HEALTHCHECK_INTERVAL_MS=3000
 WAN_API_KEY=
 KLING_API_KEY=
 RUNWAY_API_KEY=
@@ -65,6 +70,30 @@ RUNWAY_API_KEY=
 - Missing credentials block certification and execution.
 - Missing required payload fields return normalized validation errors such as `provider_payload_invalid` or `provider_missing_reference_asset`.
 - Unavailable provider submission returns normalized `provider_unavailable`.
+
+## Comfy Certification Bootstrap
+
+Comfy certification has an automation-first bootstrap path for local-only certification runs. The bootstrap detects Comfy at `COMFY_API_URL` by checking `/system_stats` and falling back to the provider-runtime Comfy health check.
+
+Bootstrap does not make Comfy the production default. It only starts Comfy when `COMFY_AUTO_START=true` and `COMFY_START_COMMAND` is configured by the local environment.
+
+| Bootstrap status | Meaning | Certification outcome |
+| --- | --- | --- |
+| `already_running` | Comfy is already healthy. | Continue certification. |
+| `started` | Bootstrap command launched and health check passed. | Continue certification. |
+| `skipped_autostart_disabled` | Comfy is offline and auto-start is disabled. | Report `skipped_offline`. |
+| `missing_start_command` | Auto-start is enabled without a command. | Report `bootstrap_config_missing`. |
+| `startup_timeout` | Comfy did not become healthy before timeout. | Report `comfy_startup_timeout`. |
+| `startup_failed` | Start command could not be spawned. | Report `comfy_startup_failed`. |
+
+Bootstrap safety rules:
+
+- It never runs unless `COMFY_AUTO_START=true`.
+- It never kills existing Comfy processes.
+- It never installs dependencies.
+- It never mutates workflows.
+- It does not require storing personal machine paths or secrets in committed files.
+- It does not enable WAN, Kling, or Runway.
 
 ## Routes
 

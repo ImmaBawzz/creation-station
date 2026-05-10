@@ -9,10 +9,14 @@ import { mapCanonicalPayloadToComfy } from "@/modules/provider-runtime/payloadMa
 import { getProviderAdapter } from "@/modules/provider-runtime/providerRegistry";
 import { inspectProviderPayload } from "@/modules/provider-runtime/readiness";
 import type { ProviderJobRequest } from "@/modules/provider-runtime/types";
+import { bootstrapComfy, type ComfyBootstrapResult } from "./comfyBootstrap";
 
 export type ComfyCertificationStatus =
   | "certified"
   | "skipped_offline"
+  | "bootstrap_config_missing"
+  | "comfy_startup_timeout"
+  | "comfy_startup_failed"
   | "failed";
 
 export type ComfyCertificationPhase = {
@@ -24,6 +28,7 @@ export type ComfyCertificationPhase = {
 
 export type ComfyCertificationReport = {
   artifactValidationResult?: Record<string, unknown>;
+  bootstrapResult?: ComfyBootstrapResult;
   certified: boolean;
   comfyUrl: string;
   executionMode: string;
@@ -109,9 +114,11 @@ function isMissingModelError(errors: string[]): string | undefined {
 }
 
 export async function runComfyCertification({
+  bootstrap = bootstrapComfy,
   executeIfOnline = true,
   payload = COMFY_CERTIFICATION_PAYLOAD,
 }: {
+  bootstrap?: () => Promise<ComfyBootstrapResult>;
   executeIfOnline?: boolean;
   payload?: ProviderJobRequest;
 } = {}): Promise<ComfyCertificationReport> {
@@ -119,13 +126,56 @@ export async function runComfyCertification({
     const phases: ComfyCertificationPhase[] = [];
     const adapter = getProviderAdapter("comfy");
     const workflowId = payload.workflowId as SupportedComfyWorkflowType;
+    const bootstrapResult = await bootstrap();
 
     pushPassed(phases, "Config validation", {
       adapterExists: adapter.providerId === "comfy",
       comfyUrl: getComfyUrl(),
+      comfyAutoStart: process.env.COMFY_AUTO_START ?? "false",
       executionMode: process.env.PROVIDER_RUNTIME_EXECUTION_MODE,
       enableComfy: process.env.PROVIDER_RUNTIME_ENABLE_COMFY,
     });
+
+    if (bootstrapResult.status === "missing_start_command") {
+      pushSkipped(phases, "Comfy bootstrap", {
+        reason: "bootstrap_config_missing",
+        bootstrapResult,
+      });
+      return {
+        ...finalizeReport({ finalStatus: "bootstrap_config_missing", phases }),
+        bootstrapResult,
+      };
+    }
+
+    if (bootstrapResult.status === "startup_timeout") {
+      pushFailed(phases, "Comfy bootstrap", "comfy_startup_timeout", { bootstrapResult });
+      return {
+        ...finalizeReport({ finalStatus: "comfy_startup_timeout", phases }),
+        bootstrapResult,
+      };
+    }
+
+    if (bootstrapResult.status === "startup_failed") {
+      pushFailed(phases, "Comfy bootstrap", "comfy_startup_failed", { bootstrapResult });
+      return {
+        ...finalizeReport({ finalStatus: "comfy_startup_failed", phases }),
+        bootstrapResult,
+      };
+    }
+
+    pushPassed(phases, "Comfy bootstrap", { bootstrapResult });
+
+    if (bootstrapResult.status === "skipped_autostart_disabled") {
+      pushSkipped(phases, "Health validation", {
+        reason: "comfy_offline",
+        bootstrapResult,
+      });
+      pushSkipped(phases, "Certification execution", { reason: "comfy_offline" });
+      return {
+        ...finalizeReport({ finalStatus: "skipped_offline", phases }),
+        bootstrapResult,
+      };
+    }
 
     const client = new ComfyClient({ baseUrl: getComfyUrl() });
     try {

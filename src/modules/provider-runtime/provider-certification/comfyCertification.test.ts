@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ComfyBootstrapResult } from "./comfyBootstrap";
 import type { ProviderJobRequest } from "@/modules/provider-runtime/types";
 
 const workflowErrors: string[] = [];
 let workflowValid = true;
 let fetchAvailable = false;
+const envSnapshot = { ...process.env };
 
 vi.mock("@/modules/comfy/workflows", () => ({
   listSupportedComfyWorkflowTypes: () => ["flux-fast-concept"],
@@ -61,6 +63,7 @@ describe("Comfy provider certification", () => {
   });
 
   afterEach(() => {
+    process.env = { ...envSnapshot };
     vi.restoreAllMocks();
   });
 
@@ -124,5 +127,43 @@ describe("Comfy provider certification", () => {
     expect(process.env.PROVIDER_RUNTIME_ENABLE_WAN).not.toBe("true");
     expect(process.env.PROVIDER_RUNTIME_ENABLE_KLING).not.toBe("true");
     expect(process.env.PROVIDER_RUNTIME_ENABLE_RUNWAY).not.toBe("true");
+  });
+
+  it("maps missing bootstrap command to bootstrap_config_missing", async () => {
+    const bootstrapResult: ComfyBootstrapResult = {
+      autoStart: true,
+      comfyUrl: "http://127.0.0.1:8188",
+      error: "COMFY_START_COMMAND is required when COMFY_AUTO_START=true.",
+      healthcheckIntervalMs: 3000,
+      startCommandConfigured: false,
+      startupTimeoutMs: 120000,
+      status: "missing_start_command",
+      workdirConfigured: false,
+    };
+    const { runComfyCertification } = await import("./comfyCertification");
+
+    const report = await runComfyCertification({ bootstrap: async () => bootstrapResult });
+
+    expect(report.finalStatus).toBe("bootstrap_config_missing");
+    expect(report.bootstrapResult?.status).toBe("missing_start_command");
+  });
+
+  it("maps bootstrap timeout to comfy_startup_timeout", async () => {
+    const bootstrapResult: ComfyBootstrapResult = {
+      autoStart: true,
+      comfyUrl: "http://127.0.0.1:8188",
+      error: "ComfyUI did not become healthy before the startup timeout.",
+      healthcheckIntervalMs: 1,
+      startCommandConfigured: true,
+      startupTimeoutMs: 1,
+      status: "startup_timeout",
+      workdirConfigured: false,
+    };
+    const { runComfyCertification } = await import("./comfyCertification");
+
+    const report = await runComfyCertification({ bootstrap: async () => bootstrapResult });
+
+    expect(report.finalStatus).toBe("comfy_startup_timeout");
+    expect(report.phases.find((phase) => phase.name === "Comfy bootstrap")?.error).toBe("comfy_startup_timeout");
   });
 });
