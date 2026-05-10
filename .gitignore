@@ -68,6 +68,7 @@ next-env.d.ts
 /visual-workspace/projects/*/lyrics/lyrics-aligned.json
 /visual-workspace/projects/*/lyrics/lyrics.srt
 /visual-workspace/projects/*/lyrics/lyrics.ass
+/visual-workspace/projects/stress-test-*/
 
 
 # playwright runtime artifacts
