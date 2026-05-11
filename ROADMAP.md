@@ -35,13 +35,14 @@ The roadmap now tracks two dimensions:
 - Manual content pipeline exists for content item, brief, draft, publishing prep, metrics, and monetization notes.
 - Creator Run v0.1 exists as an internal/private bridge that creates a deterministic production packet draft and manual production task set from a content item.
 - Basic feature-gating registry exists with release stages, access levels, feature flags, and sidebar navigation filtering.
+- Local reachable Git history has been rewritten to remove `dev.db`; local verification shows no database artifacts in history, tracked files, or the local `v1.6.0` tag tree.
 
 ### In Progress
 
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- Existing uncommitted activity/smoke-bootstrap/content-pipeline changes on `agentops/autonomous-cycle-20260511-011922`.
+- Remote repository safety cleanup for `dev.db` history before `v1.7.0-alpha.2` release prep resumes.
 
 ### Missing Before Public MVP
 
@@ -54,6 +55,7 @@ The roadmap now tracks two dimensions:
 
 ### Blocked
 
+- `v1.7.0-alpha.2` release preparation is blocked until owner-approved remote force-push/tag rewrite removes the old `dev.db` history from GitHub and existing release archive risk is rechecked.
 - Direct `npx prisma db push` still fails with a Prisma schema-engine error.
 - External publishing, imported analytics, affiliate APIs, payment integrations, and cloud/team features require future credentials, policy review, and explicit approval.
 

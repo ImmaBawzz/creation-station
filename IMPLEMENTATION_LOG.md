@@ -1,5 +1,38 @@
 # Implementation Log
 
+## 2026-05-11 - Local Database History Cleanup
+
+Requested outcome:
+
+- Preserve the current local state.
+- Create a pre-cleanup bundle backup and backup branch.
+- Install or verify `git-filter-repo`.
+- Rewrite local reachable history to remove `dev.db`.
+- Stop before force-pushing, rewriting remote tags, deleting releases, creating `v1.7.0-alpha.2`, or creating any stable `v1.7.0` release.
+
+Completed:
+
+- Created sensitive backup bundle at `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-pre-db-cleanup.bundle`.
+- Created local backup branch `backup/pre-db-history-cleanup-20260511`.
+- Installed `git-filter-repo` with Python user tooling and verified version `a40bce548d2c`.
+- Ran `git filter-repo --force --path dev.db --invert-paths`.
+- Restored the `origin` remote URL after `git-filter-repo` removed it.
+- Added `HISTORY_CLEANUP_PLAN.md` with local verification results and future remote push commands.
+
+Validation:
+
+- `git log --all -- dev.db`: passed, no output.
+- `git rev-list --objects --all | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'`: passed, no output.
+- `git ls-files | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'`: passed, no output.
+- `git ls-tree -r --name-only v1.6.0^{tree} | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'`: passed, no output.
+
+Known risks and deferred work:
+
+- Remote GitHub branches/tags still contain the old history until owner-approved force-push/tag rewrite occurs.
+- The existing GitHub `v1.6.0` release archive must be rechecked after the remote tag rewrite.
+- No force-push, remote tag rewrite, release deletion, release recreation, or release publication was performed.
+- README, CI, PR, and `v1.7.0-alpha.2` release prep remain deferred until remote repository safety is resolved.
+
 ## 2026-05-11 - Creator Run v0.1 Production Packet Bridge
 
 Requested outcome:

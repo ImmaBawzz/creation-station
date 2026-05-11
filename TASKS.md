@@ -17,7 +17,8 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Preserve current dirty worktree | Engineering hygiene | All stages | Git status/diff | Existing unrelated changes are not reverted or mixed accidentally. |
+| P0 | Complete approved remote database-history cleanup | Repository hygiene | All stages | GitHub branches, tags, `HISTORY_CLEANUP_PLAN.md` | Owner approves documented force-push/tag rewrite, remote history no longer exposes `dev.db`, and `v1.6.0` release archive risk is rechecked. |
+| P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
 | P1 | Enforce navigation gates | Gate foundation | Stages 0-6 | `src/app/components/AppSidebar.tsx` | Sidebar shows only features allowed by active stage/access context. |
@@ -45,6 +46,7 @@ Current release posture:
 
 ## Done
 
+- Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.
 - Added content pipeline roadmap, schema, actions, UI, backup coverage, and tests in the prior content MVP slice.
 - Added staged release documents.
 - Added basic feature-gating registry, stage definitions, access levels, feature flags, and tests.
