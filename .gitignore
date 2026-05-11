@@ -12,9 +12,13 @@
 
 # testing
 /coverage
+coverage/
+test-results/
+playwright-report/
 
 # next.js
 /.next/
+.next/
 /.next-playwright/
 /out/
 
@@ -33,6 +37,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# Local database/state
+*.db
+*.sqlite
+*.sqlite3
 
 # vercel
 .vercel
@@ -47,6 +57,11 @@ next-env.d.ts
 /.creation-station/
 /input/
 /output/
+/local-input/
+/local-inputs/
+/outputs/
+/generated/
+/public/generated/
 /.debug/
 /.codex/.codex/
 /.vscode/tasks.json
