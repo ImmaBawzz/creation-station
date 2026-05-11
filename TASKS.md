@@ -17,7 +17,7 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Wait for v1.7.0-alpha.2 release PR CI rerun | Release preparation | Stage 1 | GitHub PR #1, GitHub Actions, `package-lock.json`, dynamic API route types, final assembly tests | CI reruns after the npm 10 lockfile, route context type, and FFprobe test fixes and finishes before merge, tag, or release decisions. |
+| P0 | Review v1.7.0-alpha.2 release PR | Release preparation | Stage 1 | GitHub PR #1, GitHub Actions, release docs | CI has passed; review PR #1 before any merge, tag, or release decisions. |
 | P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
@@ -51,6 +51,7 @@ Current release posture:
 - Synchronized `package-lock.json` with npm 10.8.2 after the first PR CI runs failed at `npm ci`.
 - Added explicit dynamic API route context types after the next PR CI run failed at `npx tsc --noEmit`.
 - Made the final assembly FFprobe test deterministic after the next PR CI run failed at `npm test`.
+- Verified GitHub Actions CI passed on PR #1 after those fixes.
 - Opened release-prep PR #1 without creating a tag or GitHub release.
 - Force-pushed the approved rewritten remote branches and tags, verified a fresh remote clone has no database artifacts, and verified the downloaded `v1.6.0` source archive contains no database artifacts.
 - Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.

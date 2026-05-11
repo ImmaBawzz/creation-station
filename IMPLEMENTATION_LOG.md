@@ -38,12 +38,12 @@ Validation:
 - `npx vitest run src/modules/final-assembly/index.test.ts`: passed, 1 test.
 - `npm run build`: passed with 4 known Turbopack/NFT tracing warnings from the music-video builder import trace.
 - Unsafe tracked file scan: passed, no output.
-- GitHub Actions CI: runs `25695318602` and `25695743347` failed at `npm ci` before npm 10 lockfile synchronization; run `25696047710` failed at `npx tsc --noEmit` before explicit route context types were added; run `25696278977` failed at `npm test` before the FFprobe test was made deterministic; rerun is required after pushing the fix.
+- GitHub Actions CI: runs `25695318602` and `25695743347` failed at `npm ci` before npm 10 lockfile synchronization; run `25696047710` failed at `npx tsc --noEmit` before explicit route context types were added; run `25696278977` failed at `npm test` before the FFprobe test was made deterministic; run `25696516405` passed after those fixes.
 
 Known risks and deferred work:
 
 - No tag or GitHub release should be created in this cycle.
-- GitHub Actions CI must pass on the release-prep PR before merge, tag, or release approval.
+- PR review and explicit owner approval are still required before merge, tag, or release.
 - Route/API/server-action gate hardening and public MVP subfeature visibility remain deferred.
 - `npx prisma db push` remains excluded because of the known schema-engine issue.
 

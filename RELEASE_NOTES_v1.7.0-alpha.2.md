@@ -70,6 +70,7 @@ Validated locally in this release-prep cycle:
 - The initial PR CI runs failed at `npm ci` due to lockfile drift under the CI npm version; `package-lock.json` was synchronized with `npx npm@10.8.2 install --package-lock-only` before continuing release prep.
 - A later PR CI run failed at `npx tsc --noEmit` because clean checkouts do not have generated Next route context globals before build; the affected API routes now define explicit local context types.
 - A later PR CI run failed at `npm test` because the final assembly FFprobe test depended on runner-local FFprobe availability; the test now uses the Node executable as a deterministic non-FFprobe command and `FFPROBE_PATH` is read at call time.
+- GitHub Actions CI passed on PR #1 after those fixes.
 
 ## Release Boundaries
 

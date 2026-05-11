@@ -23,7 +23,7 @@ No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release ha
 - Unsafe tracked file scan: passed, no output.
 - Branch push: completed.
 - Pull request: `https://github.com/ImmaBawzz/creation-station/pull/1`
-- GitHub Actions CI: the first two runs failed at `npm ci` because `package-lock.json` was missing optional Tailwind WASM dependency entries for the CI npm version; the next run reached `npx tsc --noEmit` and failed because three API routes depended on generated Next route context globals before `next build`; the latest run reached tests and failed because one FFprobe test depended on runner-local FFprobe availability. The lockfile, route context types, and FFprobe test determinism have been fixed and a rerun is required after this push.
+- GitHub Actions CI: passed on PR #1 after fixing clean-checkout lockfile sync, dynamic route context types, and FFprobe test determinism.
 
 ## Local History Cleanup Results
 
@@ -206,18 +206,18 @@ Release-prep validation status:
 - GitHub Actions CI runs `25695318602` and `25695743347` - failed at `npm ci` before the npm 10 lockfile synchronization fix
 - GitHub Actions CI run `25696047710` - failed at `npx tsc --noEmit` before explicit route context types were added
 - GitHub Actions CI run `25696278977` - failed at `npm test` before the FFprobe test was made deterministic
+- GitHub Actions CI run `25696516405` - passed, 1m11s
 
 ## Blockers
 
-- P0: PR is open; CI must be rechecked after the npm 10 lockfile synchronization, route context type, and FFprobe test fixes before any merge, new tag, or GitHub pre-release decision.
+- P0: PR is open, but no merge, new tag, or GitHub pre-release has been approved or created yet.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Push the FFprobe test determinism fix and wait for GitHub Actions CI to rerun on PR #1.
-2. Review the PR.
-3. Do not merge, tag, or publish until separately approved.
+1. Review PR #1.
+2. Do not merge, tag, or publish until separately approved.
 
 ## Prepared Hardening Issues
 
@@ -265,4 +265,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Push the FFprobe test determinism fix, wait for GitHub Actions CI to rerun on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.
+Review PR #1. Do not create the tag or GitHub release in this cycle.

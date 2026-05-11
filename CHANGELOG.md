@@ -8,6 +8,7 @@
 - Synchronized `package-lock.json` with npm 10.8.2 so CI can run `npm ci` from a clean checkout.
 - Made dynamic API route context types explicit so CI typecheck does not depend on generated `.next` route globals.
 - Made the final assembly FFprobe failure-path test deterministic in clean CI runners.
+- Verified GitHub Actions CI passes for the release-prep PR.
 - Ran local validation for the release-prep branch.
 
 ## Creation Station v1.7.0-alpha.2 — Creator Run v0.1
