@@ -18,6 +18,8 @@ Completed so far:
 - Added `.github/workflows/ci.yml` using deterministic `AI_PROVIDER=test` and no external credentials.
 - Added `RELEASE_NOTES_v1.7.0-alpha.2.md`.
 - Added `CHANGELOG.md`.
+- Pushed `release/v1.7.0-alpha.2-creator-run`.
+- Opened PR #1: `https://github.com/ImmaBawzz/creation-station/pull/1`.
 
 Validation:
 
@@ -28,6 +30,7 @@ Validation:
 - `npm test`: passed, 49 files and 303 tests.
 - `npm run build`: passed with known Turbopack/NFT tracing warnings from the music-video builder import trace.
 - Unsafe tracked file scan: passed, no output.
+- GitHub Actions CI: triggered and pending at report update time.
 
 Known risks and deferred work:
 

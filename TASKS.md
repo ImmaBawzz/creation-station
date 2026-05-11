@@ -17,7 +17,7 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Complete v1.7.0-alpha.2 release PR | Release preparation | Stage 1 | Release branch, GitHub PR | Push the validated release branch and open a pre-release PR without creating a tag or stable release. |
+| P0 | Wait for v1.7.0-alpha.2 release PR CI | Release preparation | Stage 1 | GitHub PR #1, GitHub Actions | CI finishes on the release-prep PR before merge, tag, or release decisions. |
 | P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
@@ -48,6 +48,7 @@ Current release posture:
 
 - Updated README positioning and added CI/release docs for the `v1.7.0-alpha.2` Creator Run pre-release candidate.
 - Ran release-prep validation successfully: Prisma generate/validate, typecheck, lint, tests, build, and unsafe tracked-file scan.
+- Opened release-prep PR #1 without creating a tag or GitHub release.
 - Force-pushed the approved rewritten remote branches and tags, verified a fresh remote clone has no database artifacts, and verified the downloaded `v1.6.0` source archive contains no database artifacts.
 - Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.
 - Added content pipeline roadmap, schema, actions, UI, backup coverage, and tests in the prior content MVP slice.

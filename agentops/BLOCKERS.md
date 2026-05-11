@@ -10,7 +10,7 @@ Last updated: 2026-05-11T20:20:44Z
 ## Watch
 
 - Remote history cleanup for `dev.db` completed and was verified from a fresh clone. The `v1.6.0` GitHub source archive was downloaded after tag rewrite and contained no database artifacts.
-- Release prep is active on `release/v1.7.0-alpha.2-creator-run`; keep it scoped to README, CI, release docs, validation, branch push, and PR creation.
+- Release prep PR #1 is open; wait for CI and review before any merge, tag, or release action.
 - `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-pre-db-cleanup.bundle` preserves pre-cleanup history and is sensitive because it contains the former `dev.db` history.
 - `.codex/.codex/` is untracked and was not modified.
 - Existing Turbopack NFT tracing warnings remain tied to the music-video builder import trace.

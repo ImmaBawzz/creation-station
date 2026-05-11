@@ -21,8 +21,9 @@ No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release ha
 - Changelog added at `CHANGELOG.md`.
 - Local validation: passed.
 - Unsafe tracked file scan: passed, no output.
-- Branch push: pending.
-- Pull request: pending.
+- Branch push: completed.
+- Pull request: `https://github.com/ImmaBawzz/creation-station/pull/1`
+- GitHub Actions CI: triggered, `Validate app` pending at report update time.
 
 ## Local History Cleanup Results
 
@@ -193,16 +194,15 @@ Release-prep validation status:
 
 ## Blockers
 
-- P0: No pull request, merge, new tag, or GitHub pre-release has been created yet.
+- P0: PR is open, but no merge, new tag, or GitHub pre-release has been created yet.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Commit release docs with validation results.
-2. Push `release/v1.7.0-alpha.2-creator-run`.
-3. Open a PR into `master`.
-4. Do not merge, tag, or publish until separately approved.
+1. Wait for GitHub Actions CI to finish on PR #1.
+2. Review the PR.
+3. Do not merge, tag, or publish until separately approved.
 
 ## Prepared Hardening Issues
 
@@ -230,7 +230,7 @@ P2:
 ## Release Outcome
 
 - Branch created: `release/v1.7.0-alpha.2-creator-run`
-- Pull request created: pending
+- Pull request created: `https://github.com/ImmaBawzz/creation-station/pull/1`
 - Tag created: no new release tag; existing local tags were rewritten by history cleanup
 - GitHub release created: no
 - Pre-release status: not created
@@ -250,4 +250,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Complete validation, push the release branch, and open a PR for `v1.7.0-alpha.2` as a pre-release only. Do not create the tag or GitHub release in this cycle.
+Wait for GitHub Actions CI to finish on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.
