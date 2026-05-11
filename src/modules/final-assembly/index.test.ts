@@ -172,7 +172,7 @@ describe("final assembly planning", () => {
   it("builds a resumable final assembly manifest from timeline and provider outputs", async () => {
     const fixture = await createFixture();
     const originalFfprobePath = process.env.FFPROBE_PATH;
-    process.env.FFPROBE_PATH = path.join(process.cwd(), "tests", "fixtures", "missing-ffprobe.exe");
+    process.env.FFPROBE_PATH = process.execPath;
 
     try {
       await expect(planFinalAssembly(fixture.projectId)).rejects.toThrow("Could not inspect master audio duration");

@@ -43,7 +43,7 @@ The roadmap now tracks two dimensions:
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- GitHub Actions CI rerun and review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR, after the npm 10 lockfile and route context type fixes.
+- GitHub Actions CI rerun and review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR, after the npm 10 lockfile, route context type, and FFprobe test fixes.
 
 ### Missing Before Public MVP
 

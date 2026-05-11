@@ -24,6 +24,8 @@ Completed so far:
 - Synchronized `package-lock.json` with `npx npm@10.8.2 install --package-lock-only` so clean installs include the optional Tailwind WASM dependency entries required by the CI npm version.
 - Investigated the next GitHub Actions failure at `npx tsc --noEmit`.
 - Added explicit local route context types to three dynamic API routes so typecheck does not depend on generated `.next` route globals.
+- Investigated the next GitHub Actions failure at `npm test`.
+- Changed final assembly to read `FFPROBE_PATH` at call time and made its FFprobe failure-path test deterministic without requiring FFprobe to exist on the CI runner.
 
 Validation:
 
@@ -33,9 +35,10 @@ Validation:
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed with 16 existing warnings outside this release-doc change.
 - `npm test`: passed, 49 files and 303 tests.
-- `npm run build`: passed with 2 known Turbopack/NFT tracing warnings from the music-video builder import trace.
+- `npx vitest run src/modules/final-assembly/index.test.ts`: passed, 1 test.
+- `npm run build`: passed with 4 known Turbopack/NFT tracing warnings from the music-video builder import trace.
 - Unsafe tracked file scan: passed, no output.
-- GitHub Actions CI: runs `25695318602` and `25695743347` failed at `npm ci` before npm 10 lockfile synchronization; run `25696047710` failed at `npx tsc --noEmit` before explicit route context types were added; rerun is required after pushing the fix.
+- GitHub Actions CI: runs `25695318602` and `25695743347` failed at `npm ci` before npm 10 lockfile synchronization; run `25696047710` failed at `npx tsc --noEmit` before explicit route context types were added; run `25696278977` failed at `npm test` before the FFprobe test was made deterministic; rerun is required after pushing the fix.
 
 Known risks and deferred work:
 

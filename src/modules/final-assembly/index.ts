@@ -22,7 +22,6 @@ const PROVIDER_EXECUTION_PLAN_FILE = "providerExecutionPlan.json";
 const TIMELINE_PLAN_FILE = "timelinePlan.json";
 const LYRICS_FILE = "lyrics.json";
 const SCENE_EXECUTION_MANIFEST_FILE = "sceneAssets.json";
-const DEFAULT_FFPROBE_PATH = process.env.FFPROBE_PATH ?? "ffprobe";
 
 type FinalAssemblyError = Error & {
   details?: string[];
@@ -107,10 +106,11 @@ async function getAudioDuration(audioPath: string): Promise<number> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const execFileAsync = promisify(execFile);
+  const ffprobePath = process.env.FFPROBE_PATH ?? "ffprobe";
 
   try {
     const result = await execFileAsync(
-      DEFAULT_FFPROBE_PATH,
+      ffprobePath,
       ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audioPath],
       { windowsHide: true },
     );

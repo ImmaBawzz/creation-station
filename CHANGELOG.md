@@ -7,6 +7,7 @@
 - Added GitHub Actions CI for deterministic repository validation.
 - Synchronized `package-lock.json` with npm 10.8.2 so CI can run `npm ci` from a clean checkout.
 - Made dynamic API route context types explicit so CI typecheck does not depend on generated `.next` route globals.
+- Made the final assembly FFprobe failure-path test deterministic in clean CI runners.
 - Ran local validation for the release-prep branch.
 
 ## Creation Station v1.7.0-alpha.2 — Creator Run v0.1
@@ -25,6 +26,7 @@ Status: pre-release / internal-private alpha.
 - Release readiness report with validation results.
 - Lockfile synchronization for clean CI installs under the GitHub Actions npm version.
 - Explicit route context types for dynamic API routes used by the music-video builder and visual engine.
+- Runtime `FFPROBE_PATH` lookup and deterministic final assembly test coverage.
 
 ### Changed
 
