@@ -1,10 +1,12 @@
 # History Cleanup Plan
 
-Last updated: 2026-05-11T20:07:26Z
+Last updated: 2026-05-11T20:20:44Z
 
 ## Status
 
 Remote history cleanup is complete and verified. The approved branches and existing remote release tags were force-pushed with explicit leases. No GitHub release was deleted or recreated, and no `v1.7.0-alpha.2` release action has been performed.
+
+Release preparation has resumed on `release/v1.7.0-alpha.2-creator-run`. The history cleanup is not being repeated, and no further history rewriting is approved unless a new unsafe artifact is discovered.
 
 The local repository history was rewritten with `git-filter-repo` to remove `dev.db` from all reachable local refs. The pre-cleanup history is preserved in a sensitive local bundle:
 
@@ -185,4 +187,4 @@ git push --force-with-lease=refs/tags/v1.7.0-alpha.1:67fb74911e46d6ed07150f1713d
 
 ## Remaining Approval Requirement
 
-Release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval after reviewing the remote cleanup results. README and release-preparation work can resume in a separate approved cycle.
+Release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval. README, CI, release notes, validation, release branch push, and PR creation are approved in the current release-prep cycle.

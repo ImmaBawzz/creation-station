@@ -6,9 +6,23 @@ Report date: 2026-05-11
 
 ## Status
 
-Remote history cleanup is complete and verified. Release preparation remains stopped before README update, PR, tag, or release because this cycle was limited to remote repository safety cleanup.
+Remote history cleanup is complete and verified. Release preparation has resumed on `release/v1.7.0-alpha.2-creator-run` for the `Creation Station v1.7.0-alpha.2 - Creator Run v0.1` pre-release candidate.
 
 The previous `dev.db` history blocker is resolved for local history, remote branch/tag history, the fresh remote clone, the remote `v1.6.0` tag tree, and the downloaded `v1.6.0` GitHub source archive.
+
+No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release has been created in this cycle.
+
+## Release Prep Results
+
+- Release branch: `release/v1.7.0-alpha.2-creator-run`
+- README updated for local-first Creator Run alpha positioning.
+- GitHub Actions CI workflow added at `.github/workflows/ci.yml`.
+- Release notes added at `RELEASE_NOTES_v1.7.0-alpha.2.md`.
+- Changelog added at `CHANGELOG.md`.
+- Local validation: passed.
+- Unsafe tracked file scan: passed, no output.
+- Branch push: pending.
+- Pull request: pending.
 
 ## Local History Cleanup Results
 
@@ -167,22 +181,28 @@ Database inspection was limited to table names and row counts. No row contents w
 - Fresh clone database artifact scans - passed, no output
 - GitHub `v1.6.0` source archive database artifact scan - passed, no output
 
-Full app validation (`npx prisma generate`, `npx prisma validate`, `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`) remains intentionally deferred until README/release-preparation work resumes.
+Release-prep validation status:
+
+- `npx prisma generate` - passed
+- `npx prisma validate` - passed
+- `npx tsc --noEmit` - passed
+- `npm run lint` - passed with 16 existing warnings
+- `npm test` - passed, 49 files and 303 tests
+- `npm run build` - passed with known Turbopack/NFT tracing warnings from the music-video builder import trace
+- Unsafe tracked file scan - passed, no output
 
 ## Blockers
 
-- P0: The current local release branch has not been created because this cycle was limited to remote cleanup.
-- P0: No pull request, merge, new tag, or GitHub pre-release was created.
+- P0: No pull request, merge, new tag, or GitHub pre-release has been created yet.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Resume release preparation in a separate approved cycle.
-2. Update README and release docs for the staged local-first Creator Run pre-release.
-3. Add CI if still missing.
-4. Run full local validation.
-5. Create `release/v1.7.0-alpha.2-creator-run`, open a PR, and do not merge/tag/release unless validation passes.
+1. Commit release docs with validation results.
+2. Push `release/v1.7.0-alpha.2-creator-run`.
+3. Open a PR into `master`.
+4. Do not merge, tag, or publish until separately approved.
 
 ## Prepared Hardening Issues
 
@@ -209,8 +229,8 @@ P2:
 
 ## Release Outcome
 
-- Branch created: no release branch
-- Pull request created: no
+- Branch created: `release/v1.7.0-alpha.2-creator-run`
+- Pull request created: pending
 - Tag created: no new release tag; existing local tags were rewritten by history cleanup
 - GitHub release created: no
 - Pre-release status: not created
@@ -230,4 +250,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Remote cleanup is complete. The next smallest safe step is to resume README, CI, and release-preparation work for `v1.7.0-alpha.2` as a pre-release only.
+Complete validation, push the release branch, and open a PR for `v1.7.0-alpha.2` as a pre-release only. Do not create the tag or GitHub release in this cycle.

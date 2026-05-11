@@ -1,5 +1,40 @@
 # Implementation Log
 
+## 2026-05-11 - v1.7.0-alpha.2 Release Prep
+
+Requested outcome:
+
+- Resume release preparation after verified database history cleanup.
+- Update README for Creator Run v0.1 alpha positioning.
+- Add GitHub Actions CI.
+- Add release notes and changelog.
+- Run validation, push a release branch, and open a PR.
+- Do not create `v1.7.0-alpha.2`, stable `v1.7.0`, or a GitHub release.
+
+Completed so far:
+
+- Created `release/v1.7.0-alpha.2-creator-run`.
+- Updated `README.md` to describe Creation Station as a local-first creator workflow app with manual publishing, manual metrics, and staged release posture.
+- Added `.github/workflows/ci.yml` using deterministic `AI_PROVIDER=test` and no external credentials.
+- Added `RELEASE_NOTES_v1.7.0-alpha.2.md`.
+- Added `CHANGELOG.md`.
+
+Validation:
+
+- `npx prisma generate`: passed.
+- `npx prisma validate`: passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed with 16 existing warnings outside this release-doc change.
+- `npm test`: passed, 49 files and 303 tests.
+- `npm run build`: passed with known Turbopack/NFT tracing warnings from the music-video builder import trace.
+- Unsafe tracked file scan: passed, no output.
+
+Known risks and deferred work:
+
+- No tag or GitHub release should be created in this cycle.
+- Route/API/server-action gate hardening and public MVP subfeature visibility remain deferred.
+- `npx prisma db push` remains excluded because of the known schema-engine issue.
+
 ## 2026-05-11 - Local Database History Cleanup
 
 Requested outcome:
