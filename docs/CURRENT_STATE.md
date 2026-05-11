@@ -1,8 +1,8 @@
 # Creation Station Current State
 
-Current phase: master-line release-readiness hardening
+Current phase: v1.8 operator UX planning
 
-Latest QA result: PASS (2026-05-08 addendum)
+Latest QA result: PASS (v1.7.0-alpha release checkpoint)
 
 v1.1 release status:
 - `v1.1-rc.1` is the release-candidate QA tag.
@@ -14,19 +14,25 @@ Stable baseline:
 - Idea Inbox, AI Factory Planner, Review Inbox, Revision, Approval, and Tasks are preserved
 
 Current branch state:
-- Active branch: `master`
-- Current `master` already carries forward-only hardening beyond the older `v1.1.0` baseline, including recent Factory reliability fixes and the music-video alpha slice documented separately.
+- Active branch: `v1.8/operator-ux-pass`
+- `v1.7.0-alpha` has been released, tagged, and pushed as the stabilized core workflow checkpoint.
+- `master` is clean and includes the post-release ignore cleanup for local runtime/user input assets.
 - Older feature-branch references such as `feature/v1.5-task-separation` and `feature/v1.6-intelligence-layer` remain useful historical planning context, but they should not be treated as the current execution line.
 
 Next planning phases:
-- v1.5 = system organization + task-board scalability
+- v1.8 = operator UX, control-layer clarity, and event history foundation
 - v2.0 = deeper AI/product architecture
 
 Current focus before new code:
-- Keep the historical release baselines clear while treating `master` as the active stabilization line
-- Harden the current v1.5-style workflow in small, reviewable slices on `master`
-- Prefer QA-backed workflow clarity and state safety before broader release labeling work
+- Treat `v1.7.0-alpha` as the stable engine checkpoint
+- Keep v1.8 focused on Operator UX, not workflow engine expansion
+- Improve workflow visibility, review/task control surfaces, and inspectable event history before new system expansion
 - No major architecture expansion
+
+Local runtime artifact handling:
+- `input/` is ignored as local runtime/user media input.
+- Playwright runtime database, log, report output, and `test-results/` are ignored.
+- `dev.db` is restored to the tracked baseline and should not be committed as runtime churn.
 
 Current verified workflow notes:
 - Duplicate pending-plan creation is now blocked in the Factory action path.
@@ -35,7 +41,7 @@ Current verified workflow notes:
 - Approving a fresh review plan still creates tasks on the board.
 
 Current next best step:
-- Improve review-inbox scanability and clarity on the active `master` line, then refresh the QA/report trail after that slice.
+- Start the Activity / Event Log foundation before broader UI polish so operator-visible history exists first.
 
 Do not prioritize:
 - old v0.5.1 plans

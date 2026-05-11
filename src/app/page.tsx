@@ -4,6 +4,7 @@ import { ExecutionModeControls } from "@/app/components/ExecutionModeControls";
 import { FactorySubmitButton } from "@/app/components/FactorySubmitButton";
 import { FirstUseOnboarding } from "@/app/components/FirstUseOnboarding";
 import { TaskBoard, type BoardTask, type TaskBoardQuery } from "@/app/components/TaskBoard";
+import { getRecentActivity } from "@/lib/activity-log";
 import { assetCountLabel, assetLines } from "@/lib/asset-ui";
 import { orchestrateAutonomyGoal, type AutonomyPlan } from "@/lib/autonomy/orchestrator";
 import { db } from "@/lib/db";
@@ -214,6 +215,80 @@ type WorkerRuntimeMonitorView = {
   jobThroughput: number;
   staleJobs: number;
 };
+
+function humanizeActivityEventType(eventType: string): string {
+  return eventType
+    .split("_")
+    .filter(Boolean)
+    .map((segment) => `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`)
+    .join(" ");
+}
+
+function asActivityMetadata(
+  value: unknown,
+): Record<string, string | number | boolean | null> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const metadata = value as Record<string, unknown>;
+  const normalized: Record<string, string | number | boolean | null> = {};
+
+  for (const [key, candidate] of Object.entries(metadata)) {
+    if (
+      typeof candidate === "string" ||
+      typeof candidate === "number" ||
+      typeof candidate === "boolean" ||
+      candidate === null
+    ) {
+      normalized[key] = candidate;
+    }
+  }
+
+  return normalized;
+}
+
+function getActivityTitle(metadata: Record<string, string | number | boolean | null>): string {
+  const title = metadata.title;
+  const fallback = metadata.planTitle ?? metadata.ideaTitle ?? metadata.topTask;
+
+  if (typeof title === "string" && title.trim()) {
+    return title;
+  }
+
+  if (typeof fallback === "string" && fallback.trim()) {
+    return fallback;
+  }
+
+  return "Unknown item";
+}
+
+function summarizeActivityMetadata(
+  metadata: Record<string, string | number | boolean | null>,
+): string {
+  const entries = Object.entries(metadata).filter(
+    ([key, value]) =>
+      !["title", "ideaTitle", "planTitle"].includes(key) &&
+      value !== null &&
+      value !== "",
+  );
+
+  if (entries.length === 0) {
+    return "No extra details";
+  }
+
+  return entries
+    .slice(0, 2)
+    .map(([key, value]) => `${humanizeActivityEventType(key)}: ${String(value)}`)
+    .join(" • ");
+}
+
+function formatActivityTimestamp(value: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
 
 function cleanSearchParam(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
@@ -1458,7 +1533,8 @@ export default async function Home({ searchParams }: HomeProps) {
     reviewPlans,
     tasks: tasksWithPipeline,
   });
-  const [persistedRun, recentRuns, activeLocks, executionRequests, workerMonitor] = await Promise.all([
+  const [recentActivity, persistedRun, recentRuns, activeLocks, executionRequests, workerMonitor] = await Promise.all([
+    getRecentActivity(8),
     autonomyRunId
       ? db.run.findUnique({
           where: { id: autonomyRunId },
@@ -1557,6 +1633,62 @@ export default async function Home({ searchParams }: HomeProps) {
             revision={autonomyRevision}
             workerMonitor={workerMonitor}
           />
+
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Recent Activity</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Auditable workflow events from the current workspace.
+                </p>
+              </div>
+              <p className="text-xs text-zinc-500">Last {recentActivity.length} events</p>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {recentActivity.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/70 p-4 text-sm">
+                  <p className="font-semibold text-zinc-200">No activity logged yet</p>
+                  <p className="mt-2 text-zinc-400">
+                    Create an idea, send it to the Factory, or export a backup to start the audit trail.
+                  </p>
+                </div>
+              )}
+
+              {recentActivity.map((activity) => {
+                const metadata = asActivityMetadata(activity.metadata);
+
+                return (
+                  <article
+                    key={activity.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 font-semibold text-zinc-200">
+                            {humanizeActivityEventType(activity.eventType)}
+                          </span>
+                          <span className="rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-zinc-400">
+                            {activity.entityType}
+                          </span>
+                        </div>
+                        <p className="mt-3 font-medium text-zinc-100">
+                          {getActivityTitle(metadata)}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {summarizeActivityMetadata(metadata)}
+                        </p>
+                      </div>
+                      <time className="shrink-0 text-xs text-zinc-500">
+                        {formatActivityTimestamp(activity.createdAt)}
+                      </time>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
 
           <div
             id="new-idea"

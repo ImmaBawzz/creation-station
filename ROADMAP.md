@@ -1,324 +1,102 @@
-# Creation Station Roadmap
+# Creation Station Staged Release Roadmap
 
-## Roadmap Rules
-
-1. `ROADMAP.md` is the source of truth for staged progress.
-2. Continue to the next best roadmap step automatically unless blocked, complete, unsafe, or redirected by the user.
-3. Every completed implementation should end with a short reminder that names the next best step.
-4. Finish validation for the current slice before jumping to a distant milestone.
-5. Update this roadmap when a milestone gate is satisfied so future work does not rely on memory alone.
+Last updated: 2026-05-11
 
 ## Current Status
 
-- Current stable baseline: `v1.1.0`
-- Current completed milestone: `v1.1`
-- Current next planning milestone: `v1.5`
-- Current working branch: `master`
-- Current next best step: continue small v1.5-style release-readiness hardening on `master`, starting with review-inbox scanability and clarity.
-
-Baseline notes:
-- `v1.1-rc.1` remains the release-candidate QA tag.
-- `v1.1.0` is the stable baseline tag for v1.5 planning and implementation.
-- `docs/roadmap/v1.5-release-readiness.md` is the active v1.5 plan.
-- `docs/roadmap/v1.5-system-organization.md` is earlier foundation planning and remains useful as context for completed organization work.
-- Older branch references such as `feature/v1.5-task-separation` and `feature/v1.6-intelligence-layer` should now be treated as historical planning/release context rather than the active execution line.
-- Current `master` includes forward-only stabilization work, including duplicate-plan prevention and visible `IN_FACTORY` workflow state hardening.
-
-Fresh validation notes:
-- 2026-05-08 manual QA on `master` confirmed visible `IN_FACTORY` state, persisted revision notes, and successful task creation after approving a fresh review plan.
-- Use `QA_PASS_REPORT.md` and `docs/CURRENT_STATE.md` as the current operational record for active `master` behavior.
-
-## Next Planning Phases
-
-### v1.5 - Release Readiness
-
-Goal: prepare the stable local-first solo creator workflow for a v1.5 release without unnecessary architecture.
-
-Allowed direction:
-- Improve onboarding, UX polish, reliability, analytics, and release readiness.
-- Keep optional cloud persistence limited to manual, opt-in backup persistence guidance and verification.
-- Preserve the current Idea Inbox -> AI Factory Planner -> Review Inbox -> Revision -> Approval -> Tasks workflow.
-- Keep changes small and reviewable.
-- Prefer clarity, reliability, and local data safety before adding product surface.
-
-Non-goals:
-- No authentication or team systems.
-- No real cloud sync, background sync, or conflict resolution.
-- No external connectors, agents, automation engines, or plugin systems.
-- No full asset vault or major architecture rewrite.
-- No v2 product architecture work.
-
-### v2.0 - Deeper AI/Product Architecture
-
-Goal: explore deeper AI and product architecture only after v1.5 organization work is planned and stable.
-
-Planning guardrails:
-- Do not begin v2.0 implementation from the v1.1 baseline without a separate plan.
-- Any new subsystem, schema expansion, provider architecture, or agent-like behavior requires explicit approval.
-- Keep the v1.1 core workflow intact as the baseline.
-
-## v0.2 - AI Factory Planner
-
-Goal: Replace the rule-based Factory plan generator with an Ollama-powered planner and give it a dedicated Factory page.
-
-Included scope:
-- Ollama-backed factory planning
-- dedicated Factory Planner page
-- prompt builder and AI provider layer
-- inline success and error guidance
-- saved AI-generated plans flowing into review
-
-Excluded scope:
-- plan-aware task generation
-- revision feedback loop
-- asset tracking
-- autonomous execution agents
-
-Implementation steps:
-1. Add `factoryPrompt.ts` and `aiProvider.ts`.
-2. Replace the hardcoded factory plan logic in the server action.
-3. Add the Factory Planner route and navigation.
-4. Add beginner-friendly setup and inline error handling.
-5. Verify real local generation through Ollama.
-
-Verification gates:
-1. Lint passes.
-2. Build passes.
-3. A real AI-generated plan is saved to the database.
-4. The saved plan appears in the Review Inbox.
-
-Next best step:
-- Move to `v0.3` and validate the approval path for AI-generated plans all the way through task creation.
-
-Completion notes:
-- Review Inbox shows `nextActions`, colored status badge, and conditional action buttons.
-- Idea Inbox guards "Send to Factory" by idea status; shows "Plan in Review" and "Tasks Created" badges.
-- Removed dead intermediate `Idea: APPROVED` assignment in `approvePlan`.
-
-## v0.3 - AI Approval Flow Validation
-
-Goal: Prove that AI-generated plans survive the full approval flow without regressions in status transitions, review behavior, or task creation.
-
-Included scope:
-- approve one or more AI-generated plans
-- verify status transitions from `PLAN_READY` to `APPROVED` to `TASKED`
-- verify tasks are created correctly for AI-generated plans
-- tighten review messaging if the flow feels unclear
-
-Excluded scope:
-- redesigning task generation logic
-- adding revision comments or chat
-
-Implementation steps:
-1. Approve an AI-generated plan and verify the current task creation path.
-2. Confirm idea, plan, and task states stay consistent.
-3. Improve review or approval messaging if any part of the flow is confusing.
-4. Capture any approval-flow gaps that block structured task generation.
-
-Verification gates:
-1. An AI-generated plan can be approved successfully.
-2. Tasks are created from the approved AI plan.
-3. Status transitions remain consistent across idea and plan records.
-4. Review UI stays understandable after approval.
-
-Next best step:
-- Replace hardcoded task titles with plan-aware task generation in `v0.4`.
-
-Completion notes:
-- All v0.3 verification gates satisfied.
-- Review UI updated; status transitions consistent.
-
-## v0.4 - Structured Task Generation
-
-Goal: Generate tasks from the actual approved plan content instead of a fixed hardcoded list.
-
-Included scope:
-- derive task titles and descriptions from plan content
-- improve task descriptions and priorities
-- keep human approval in place before tasks are created
-
-Excluded scope:
-- autonomous task execution
-- multi-agent workflow orchestration
-
-Implementation steps:
-1. Define a structured task output shape.
-2. Update approval flow to create tasks from plan content.
-3. Add validation that task generation remains readable and useful.
-4. Verify the task board reflects plan-aware tasks.
-
-Verification gates:
-1. Approved plans create non-hardcoded tasks.
-2. Tasks reflect plan content clearly.
-3. Task creation remains stable in the existing workflow.
-
-Next best step:
-- Add revision feedback and re-plan support in `v0.5`.
-
-Completion notes:
-- `approvePlan` now parses `plan.nextActions` (newline-split) into individual task titles.
-- Falls back to 5 hardcoded titles only if AI returns no usable lines.
-- Task description now uses `plan.summary` instead of a generic string.
-
-## v0.5 - Revision and Re-Plan Loop
-
-Goal: Let users request revision with feedback and regenerate a better plan from that feedback.
-
-Included scope:
-- revision reason capture
-- re-plan flow using feedback
-- clear display of latest revision state
-
-Excluded scope:
-- chat-based planning assistant
-- full revision history explorer
-
-Implementation steps:
-1. Capture revision feedback in the UI and action layer.
-2. Re-run planning with prior plan plus user feedback.
-3. Mark latest revision clearly for review.
-4. Verify the review queue stays understandable.
-
-Verification gates:
-1. Revision requests include usable feedback.
-2. A revised plan can be generated and reviewed.
-3. Status flow remains consistent.
-
-Next best step:
-- Add asset and dependency tracking in `v0.6`.
-
-Completion notes:
-- `requestRevision` now accepts and persists `revisionNotes`.
-- Review Inbox shows an inline textarea for revision feedback before submitting.
-- REVISION_REQUESTED plans display stored revision notes in an orange callout.
-- NEEDS_REVISION ideas show a "Re-plan with Feedback" button in the Idea Inbox.
-- `sendToFactory` detects the most recent REVISION_REQUESTED plan and passes its content + notes to the AI.
-- `buildFactoryPrompt` conditionally injects prior plan context and reviewer feedback into the prompt.
-- `FactoryPlan.revisionNotes` field added to schema via `prisma db push`.
-
-## v0.6 - Asset and Workflow Expansion
-
-Goal: Track required assets and improve visibility across all workflow stages.
-
-Included scope:
-- asset placeholders
-- dependency or resource tracking
-- clearer stage-to-stage workflow visibility
-
-Excluded scope:
-- production or publishing automation
-
-Implementation steps:
-1. Model or represent required assets more clearly.
-2. Surface asset needs alongside plans and tasks.
-3. Improve cross-stage UI visibility.
-4. Verify the workflow remains easy to follow.
-
-Verification gates:
-1. Assets are visible and actionable.
-2. Workflow stages show clearer continuity.
-3. Added tracking does not make the UI confusing.
-
-Next best step:
-- Introduce guided automation hooks in `v0.7`.
-
-## v0.7 - Guided Execution Layer
-
-Goal: Add guided agent or automation assistance while keeping humans in control.
-
-Included scope:
-- optional guided automation actions
-- stronger workflow guardrails
-- limited agent-assisted task advancement
-
-Excluded scope:
-- fully autonomous publishing
-- unattended execution chains
-
-Implementation steps:
-1. Define where guidance is useful and safe.
-2. Add limited automation hooks for selected tasks.
-3. Keep state transitions explicit and reviewable.
-4. Verify guardrails before expanding automation.
-
-Verification gates:
-1. Guided actions are clear and reversible.
-2. Users still understand what happened and why.
-3. Automation does not bypass review discipline.
-
-Next best step:
-- Connect production and publishing steps in `v0.8`.
-
-## v0.8 - Production Pipeline
-
-Goal: Extend the workflow into production readiness and execution tracking.
-
-Included scope:
-- production states
-- execution checklist
-- artifact readiness tracking
-
-Excluded scope:
-- final release hardening and polish
-
-Implementation steps:
-1. Add production-oriented states.
-2. Track readiness for execution and output artifacts.
-3. Connect tasks to production progression.
-4. Verify the end-to-end workflow still reads clearly.
-
-Verification gates:
-1. Production states are coherent.
-2. Readiness tracking is visible and actionable.
-3. The workflow can move from idea to production without ambiguity.
-
-Next best step:
-- Harden UX, validation, and docs in `v0.9`.
-
-## v0.9 - Product Hardening
-
-Goal: Improve reliability, clarity, and usability before the MVP release.
-
-Included scope:
-- validation improvements
-- clearer messaging
-- UX polish
-- docs and regression checks
-
-Excluded scope:
-- major feature expansion
-
-Implementation steps:
-1. Tighten validation and edge-case handling.
-2. Improve user guidance and copy.
-3. Run regression-oriented checks across the core workflow.
-4. Update docs to match the stable workflow.
-
-Verification gates:
-1. Core flows are stable and understandable.
-2. Docs match the actual product behavior.
-3. Validation catches common failure modes.
-
-Next best step:
-- Define and satisfy final MVP criteria in `v1.0`.
-
-## v1.0 - Complete Creative Ops MVP
-
-Goal: Ship a stable idea-to-plan-to-task workflow with revision support, structured task generation, roadmap discipline, and clear operating guidance.
-
-Included scope:
-- stable creative workflow from inbox through tasks
-- revision and re-plan support
-- structured task generation
-- roadmap-driven development system
-- docs and verification discipline
-
-Release criteria:
-1. Core workflow is stable end to end.
-2. Task generation reflects plan content.
-3. Revision loop exists and is understandable.
-4. Roadmap and workflow docs are accurate and current.
-5. Future work can continue from the roadmap without re-explaining the process.
-
-Next best step:
-- After `v1.0`, decide whether the product should deepen automation, collaboration, or publishing.
+Creation Station has a local-first creative workflow with idea capture, AI Factory planning, review/revision, task creation, task controls, activity logging, backup/restore, local analytics, and a newer manual content pipeline. It also contains more powerful media, provider runtime, and autonomy modules that should not be publicly exposed all at once.
+
+The roadmap now tracks two dimensions:
+
+- Product phase: what capability is being built.
+- Release stage: who is allowed to use it and under what controls.
+
+## Release Stages
+
+| Stage | Name | Product posture |
+| --- | --- | --- |
+| 0 | Internal use only | Validate core workflow, classify features, keep all high-impact work internal. |
+| 1 | Private creator workflow tool | One trusted creator uses the manual workflow for real work. |
+| 2 | Invite-only beta | Small cohort tests private/beta surfaces with structured feedback. |
+| 3 | Limited public MVP | Public-safe manual workflow only. |
+| 4 | Partner/agency release | Vetted users access production/media/provider tooling. |
+| 5 | Advanced automation release | Audited automation with approvals, logs, locks, and rollback. |
+| 6 | Full platform release | Scaled platform after integrations, trust, safety, compliance, and support mature. |
+
+## Status Labels
+
+### Done
+
+- Next.js 16, React 19, TypeScript, Prisma 7, SQLite, Vitest, and Playwright are in place.
+- Idea inbox, Factory Planner, Review Inbox, revision loop, approval, and task board are implemented.
+- Local AI planning works through Ollama or the deterministic test provider.
+- Activity events and local analytics exist.
+- Manual JSON backup/restore exists.
+- Manual content pipeline exists for content item, brief, draft, publishing prep, metrics, and monetization notes.
+- Creator Run v0.1 exists as an internal/private bridge that creates a deterministic production packet draft and manual production task set from a content item.
+- Basic feature-gating registry exists with release stages, access levels, feature flags, and sidebar navigation filtering.
+- Local reachable Git history has been rewritten to remove `dev.db`; local verification shows no database artifacts in history, tracked files, or the local `v1.6.0` tag tree.
+- Remote GitHub branch/tag history has been force-pushed with the rewritten cleanup refs; a fresh clone and the `v1.6.0` source archive no longer expose database artifacts.
+
+### In Progress
+
+- Staged release strategy and gate foundation.
+- Internal/private Creator Run v0.1 validation on a real first content run.
+- v1.8 operator UX pass and activity-event coverage.
+- Review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR, after GitHub Actions CI passed.
+
+### Missing Before Public MVP
+
+- Route-level gates.
+- API route gates.
+- Server-action gates.
+- Public MVP gate-context smoke matrix.
+- Public copy review for manual workflow, user-entered metrics, and no direct publishing.
+- Stronger restore confirmation or public hiding.
+
+### Blocked
+
+- Direct `npx prisma db push` still fails with a Prisma schema-engine error.
+- External publishing, imported analytics, affiliate APIs, payment integrations, and cloud/team features require future credentials, policy review, and explicit approval.
+
+### Not Needed Yet
+
+- Marketplace, public automation, team accounts, cloud sync, direct publishing, payment integrations, automated revenue import, and multi-user permissions.
+
+## Release-Aware Roadmap
+
+| Order | Product phase | Release stage | Objective | Features to build or harden | Technical controls | Acceptance criteria |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Release planning | Stage 0 | Define staged release contract | Release strategy, public MVP scope, private beta plan, ecosystem impact, feature audit | Docs and central gate registry | Every major feature is classified and staged. |
+| 2 | Gate foundation | Stage 0 | Make staged release enforceable in code | Feature registry, flags, access levels, navigation gates | `src/lib/feature-gating.ts`, tests | Gate tests pass and sidebar filters by stage/access. |
+| 3 | Private creator workflow | Stage 1 | Stabilize one real creator workflow | Core workflow, content pipeline, backup, settings, manual monetization notes | Private creator access, backup discipline | One creator can complete real workflows without data loss. |
+| 3a | Creator Run v0.1 | Stage 1 | Bridge content items to production-ready packets and task-board execution | Production packet draft, manual music/image/video plan, production tasks, markdown export | Private creator gate, no provider credentials, no publishing automation | One content item can become a packet and manual task sequence. |
+| 4 | Invite beta | Stage 2 | Validate workflow with small cohort | Beta onboarding, feedback loops, beta-only monetization/analytics notes | Beta access, feature flags, issue triage | Beta users can onboard and complete workflows with known limitations. |
+| 5 | Public MVP hardening | Stage 3 | Prepare limited public release | Public-safe workflow, route/action/API gates, public copy, smoke matrix | Public access, public stage env, hidden private/partner/advanced features | Public users see only Public MVP-safe features and checks pass. |
+| 6 | Partner readiness | Stage 4 | Prepare vetted production workflows | Music-video builder, visual engine, provider governance, workflow certification | Partner access, cost/rate controls, provider readiness gates | Partner workflows are auditable, bounded, and not public. |
+| 7 | Advanced automation readiness | Stage 5 | Release controlled automation | Worker execution, advanced media orchestration, approval/rollback controls | Advanced access, approvals, logs, locks, stop conditions | Automated actions are auditable and recoverable. |
+| 8 | Full platform planning | Stage 6 | Scale only after trust controls mature | Integrations, payments, teams, marketplace, cloud sync | Compliance, consent, data isolation, quotas, abuse prevention | Full-platform launch has governance, support, and safety plans. |
+
+## Strict Next Execution Plan
+
+| Order | Priority | Task | Stage | Reason |
+| --- | --- | --- | --- | --- |
+| 1 | P0 | Keep release docs and feature audit current | Stages 0-6 | Prevents accidental scope expansion. |
+| 1a | P0 | Review `v1.7.0-alpha.2` release-prep PR | Stage 1 | CI has passed; review PR #1 without tagging or releasing. |
+| 2 | P1 | Add route-level page gates | Stage 3 | Navigation gating alone is insufficient for public release. |
+| 3 | P1 | Add server-action and API gates | Stage 3 | Hidden workflows must not be callable directly. |
+| 4 | P1 | Add gate-context smoke tests | Stages 1-4 | Ensures staged release behavior does not regress. |
+| 5 | P1 | Gate `/content` monetization controls separately | Stages 2-3 | Public MVP can include manual content workflow without beta monetization exposure. |
+| 6 | P1 | Validate Creator Run v0.1 with one real internal content run | Stage 1 | Confirms the packet/task bridge works before public exposure. |
+| 7 | P2 | Add public MVP copy pass | Stage 3 | Reduces trust and ecosystem confusion. |
+| 8 | P2 | Harden partner provider controls | Stage 4 | Cost/runtime/provider risks need controls before partner release. |
+| 9 | P2 | Harden automation approvals and rollback | Stage 5 | Automation should not ship without audit and recovery. |
+
+## Assumptions
+
+- The app remains local-first until a future release explicitly approves cloud or team architecture.
+- Publishing means manual status/URL/date tracking until external publishing is approved.
+- Metrics remain user-entered until imported analytics are approved.
+- Monetization values are notes until financial integrations and reporting language are reviewed.
+- Internal users may inspect future release-ready work, but public users must not see private, partner, advanced, not-ready, or not-needed features.
+- Dependency audit findings are tracked separately from this pre-release presentation pass unless they block release approval.

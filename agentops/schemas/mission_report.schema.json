@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Autonomous Agent Mission Report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string" },
+    "timestamp_utc": { "type": "string" },
+    "project_name": { "type": "string" },
+    "main_objective": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "partially_completed", "blocked", "failed"]
+    },
+    "repo_summary": { "type": "string" },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "workers_hired": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": { "type": "string" },
+          "assignment": { "type": "string" },
+          "result": { "type": "string" }
+        },
+        "required": ["role", "assignment", "result"]
+      }
+    },
+    "files_changed": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commands_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "command": { "type": "string" },
+          "result": { "type": "string" }
+        },
+        "required": ["command", "result"]
+      }
+    },
+    "tests_or_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["passed", "failed", "skipped", "not_available"] },
+          "notes": { "type": "string" }
+        },
+        "required": ["name", "status", "notes"]
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_tasks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": { "type": "string" }
+  },
+  "required": [
+    "run_id",
+    "timestamp_utc",
+    "project_name",
+    "main_objective",
+    "status",
+    "repo_summary",
+    "acceptance_criteria",
+    "workers_hired",
+    "files_changed",
+    "commands_run",
+    "tests_or_checks",
+    "decisions",
+    "risks",
+    "blockers",
+    "next_tasks",
+    "summary"
+  ]
+}

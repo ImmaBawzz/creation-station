@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 
@@ -11,6 +11,10 @@ const fileNames: Record<string, string> = {
   promptText: "prompt.txt",
   thumbnail: "thumbnail.jpg",
   workflow: "workflow.json",
+};
+
+type DownloadRouteContext = {
+  params: Promise<{ id: string }>;
 };
 
 function parseReleaseDirectory(result: string): string {
@@ -35,8 +39,8 @@ function contentTypeFor(file: string): string {
 }
 
 export async function GET(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
+  request: NextRequest,
+  context: DownloadRouteContext,
 ) {
   const { id } = await context.params;
   const fileKey = new URL(request.url).searchParams.get("file") ?? "";

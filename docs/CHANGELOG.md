@@ -1,5 +1,62 @@
 # Changelog
 
+## v1.8.2 - Final Assembly Engine
+
+### Added
+
+- Final assembly module under `src/modules/final-assembly/` to convert timeline, provider, scene, lyrics, and master-audio artifacts into export-ready music video outputs.
+- Resumable `finalAssembly.json` manifest with stage tracking, warnings, export artifact paths, and retry recovery support.
+- Assembly handling for duplicate-scene removal, missing-scene fallback, corrupted clip fallback, duration correction, subtitle generation, and audio-duration sync.
+- Export presets for YouTube 16:9, TikTok 9:16, Instagram Reels, lyric-only, and teaser trailer outputs under each project `exports/` folder.
+- Final assembly API route and media UI status surface for assembling, rendering, completed, and failed states.
+
+### Changed
+
+- The existing visual-engine render path now delegates to the final assembly engine so older render entry points still reach the new export pipeline.
+
+### Not Added
+
+- New external render services
+- New database models
+- Real video-provider execution beyond the existing approved orchestration scope
+
+## v1.8.1 - Video Provider Governance Simulation
+
+### Added
+
+- Simulation-only provider governance layer under `src/modules/video-generation/governance/` for ranking candidate video providers from timeline output.
+- Persisted `providerExecutionPlan.json` manifest with per-scene primary provider, fallback chain, health state, and estimated cost.
+- `GET` and `POST` route at `/api/video-generation/projects/[id]/governance` for loading and generating provider execution plans.
+- Media pipeline UI preview for provider allocation, fallback coverage, and per-scene ranking details.
+- Focused governance unit coverage for provider ranking, manifest persistence, and missing timeline-plan failure handling.
+
+### Not Added
+
+- Real video provider execution
+- External provider credentials or connectors
+- New top-level orchestration subsystem
+
+## v1.8.0 - Activity Event Foundation
+
+### Added
+
+- Durable `ActivityEvent` Prisma model for auditable workflow history across ideas, plans, tasks, and backup exports.
+- Shared `logActivity()` and `getRecentActivity()` utilities for server actions and dashboard reads.
+- Dashboard `Recent Activity` panel with event labels, entity titles, timestamps, and compact metadata summaries.
+- Focused unit coverage for activity creation, retrieval ordering, and workflow logging integration.
+
+### Changed
+
+- Existing idea creation, Factory send, revision request, plan approval, task generation, and backup export flows now emit activity events without changing their core workflow logic.
+
+### Not Added
+
+- Autonomous execution
+- Background agents
+- Websocket systems
+- Notification systems
+- Large architecture rewrites
+
 ## v1.4.1 - Recommendation Tuning
 
 ### Added

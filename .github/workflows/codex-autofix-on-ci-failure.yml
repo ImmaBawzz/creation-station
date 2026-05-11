@@ -1,0 +1,59 @@
+name: Codex Auto-fix on CI Failure
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    env:
+      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+      FAILED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      FAILED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FAILED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Codex CLI
+        run: npm i -g @openai/codex
+
+      - name: Bootstrap common dependencies
+        run: bash agentops/scripts/stack_bootstrap.sh
+
+      - name: Ask Codex for minimal CI repair
+        run: |
+          codex exec --sandbox workspace-write --ask-for-approval never \
+            "Read the repository, inspect likely CI failure causes, run the relevant local checks if available, identify the minimal safe change needed, implement only that change, update agentops/REFLECTIONS.md, and stop. Do not refactor unrelated files. Do not disable tests or weaken security."
+
+      - name: Create pull request when changes exist
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: agent/ci-autofix-${{ github.run_id }}
+          base: ${{ env.FAILED_HEAD_BRANCH }}
+          title: "Auto-fix failing CI via Codex"
+          commit-message: "Auto-fix failing CI via Codex"
+          body: |
+            This PR was generated after CI failed.
+
+            Review the patch, test output, and `agentops/REFLECTIONS.md` before merge.
+          labels: |
+            agent-generated
+            ci-fix
+            needs-review
