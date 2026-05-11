@@ -33,6 +33,21 @@ No stable `v1.7.0` release was created. `v1.6.0` remains published as the stable
 - Archive safety check path: `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-v1.7.0-alpha.2-archive-check`.
 - `v1.7.0-alpha.2` source archive unsafe artifact scan: passed, no output.
 
+## Post-release Hardening Results
+
+- Default branch protection: enabled on `master`.
+- Required CI check name: `Validate app`.
+- Required status checks before merging: enabled.
+- Strict status checks / up-to-date branch requirement: enabled.
+- Pull requests before merging: enabled with `required_approving_review_count: 0`.
+- Force pushes: disabled.
+- Branch deletions: disabled.
+- Admin enforcement: disabled so the owner/admin path remains available for emergency recovery.
+- Existing repository rulesets: none.
+- No tag or GitHub release was created in this post-release hardening pass.
+- Branch protection issue #2 was closed after verification.
+- Node.js 20 GitHub Actions deprecation follow-up issue #14 was created.
+
 ## Local History Cleanup Results
 
 - Pre-cleanup bundle created: `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-pre-db-cleanup.bundle`
@@ -234,22 +249,22 @@ Final default branch validation after PR merge:
 
 ## Blockers
 
-- P0: Default branch protection with required CI checks is not yet enabled.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 - P1: `npm audit` reports 7 dependency findings, 5 moderate and 2 high; dependency remediation remains deferred unless it blocks release approval.
+- P1: GitHub Actions emitted a Node.js 20 actions deprecation warning; follow-up issue #14 tracks future runner compatibility.
 
 ## Remediation Plan
 
-1. Enable default branch protection with required CI checks.
-2. Work the route/API/server-action gate hardening issues before public MVP exposure.
+1. Work the route/API/server-action gate hardening issues before public MVP exposure.
+2. Resolve the GitHub Actions Node.js 20 deprecation warning before it can affect CI reliability.
 3. Keep `v1.7.0-alpha.2` labeled and treated as an internal/private alpha pre-release.
 
 ## Created Hardening Issues
 
 P0:
 
-- #2 Enable default branch protection with required CI checks: `https://github.com/ImmaBawzz/creation-station/issues/2`
+- #2 Enable default branch protection with required CI checks: `https://github.com/ImmaBawzz/creation-station/issues/2` - closed after branch protection was enabled and verified
 
 P1:
 
@@ -260,6 +275,7 @@ P1:
 - #7 Hide or disable monetization controls in public MVP context: `https://github.com/ImmaBawzz/creation-station/issues/7`
 - #8 Add gate-context smoke tests for internal/private/beta/public/partner contexts: `https://github.com/ImmaBawzz/creation-station/issues/8`
 - #9 Add dependency/security audit pass: `https://github.com/ImmaBawzz/creation-station/issues/9`
+- #14 Resolve GitHub Actions Node.js 20 deprecation warning for future runner compatibility: `https://github.com/ImmaBawzz/creation-station/issues/14`
 
 P2:
 
@@ -295,4 +311,4 @@ Custom labels `release-hardening`, `feature-gating`, `public-mvp`, `creator-run`
 
 ## Next Smallest Safe Step
 
-Enable default branch protection with required CI checks, then validate Creator Run v0.1 with the first real internal/private content run.
+Validate Creator Run v0.1 with the first real internal/private content run, then continue public MVP hardening through the route/API/server-action gate issues.

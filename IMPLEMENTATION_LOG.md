@@ -1,5 +1,38 @@
 # Implementation Log
 
+## 2026-05-11 - Post-release Hardening Pass
+
+Requested outcome:
+
+- Enable default branch protection or a repository ruleset for `master`.
+- Require the `Validate app` CI check before merging.
+- Require pull requests and prevent direct pushes if practical without blocking owner emergency recovery.
+- Avoid duplicate hardening issues and create any missing ones.
+- Update release tracking docs only.
+
+Completed:
+
+- Verified `master` was the default branch and current GitHub permission was `ADMIN`.
+- Confirmed no existing branch protection or repository rulesets were configured.
+- Enabled branch protection on `master`.
+- Required status check: `Validate app`.
+- Enabled strict required status checks.
+- Required pull requests before merging with zero required approving reviews.
+- Disabled force pushes and branch deletions.
+- Left admin enforcement disabled so owner/admin emergency recovery remains available.
+- Verified `master` is protected through the GitHub API.
+- Closed completed branch-protection issue #2.
+- Confirmed issues #3 through #13 already existed for the requested hardening work.
+- Created issue #14 for the GitHub Actions Node.js 20 deprecation warning.
+- Created no tag and published no release in this pass.
+
+Remaining blockers:
+
+- Route/API/server-action gate hardening remains required before public MVP exposure.
+- Public MVP content and monetization visibility need refinement.
+- Dependency/security audit pass remains open.
+- GitHub Actions Node.js 20 deprecation warning needs follow-up.
+
 ## 2026-05-11 - v1.7.0-alpha.2 Pre-release Publication
 
 Requested outcome:

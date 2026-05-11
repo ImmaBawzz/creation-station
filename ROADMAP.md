@@ -39,13 +39,15 @@ The roadmap now tracks two dimensions:
 - Remote GitHub branch/tag history has been force-pushed with the rewritten cleanup refs; a fresh clone and the `v1.6.0` source archive no longer expose database artifacts.
 - `v1.7.0-alpha.2` has been published as a GitHub pre-release for Creator Run v0.1.
 - Follow-up hardening issues #2 through #13 have been created.
+- `master` branch protection is enabled with `Validate app` required before merge, pull requests required, force pushes/deletions disabled, and admin enforcement disabled for emergency recovery.
+- GitHub Actions Node.js 20 deprecation follow-up is tracked in issue #14.
 
 ### In Progress
 
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- Post-release hardening for branch protection, gate enforcement, public MVP visibility, and dependency audit.
+- Post-release hardening for gate enforcement, public MVP visibility, dependency audit, and GitHub Actions runner compatibility.
 
 ### Missing Before Public MVP
 
@@ -84,15 +86,16 @@ The roadmap now tracks two dimensions:
 | Order | Priority | Task | Stage | Reason |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | Keep release docs and feature audit current | Stages 0-6 | Prevents accidental scope expansion. |
-| 1a | P0 | Enable default branch protection with required CI checks | All stages | Prevents unsafe merges after release publication. |
+| 1a | P1 | Validate Creator Run v0.1 with one real internal content run | Stage 1 | Confirms the packet/task bridge works before public exposure. |
 | 2 | P1 | Add route-level page gates | Stage 3 | Navigation gating alone is insufficient for public release. |
 | 3 | P1 | Add server-action and API gates | Stage 3 | Hidden workflows must not be callable directly. |
 | 4 | P1 | Add gate-context smoke tests | Stages 1-4 | Ensures staged release behavior does not regress. |
 | 5 | P1 | Gate `/content` monetization controls separately | Stages 2-3 | Public MVP can include manual content workflow without beta monetization exposure. |
-| 6 | P1 | Validate Creator Run v0.1 with one real internal content run | Stage 1 | Confirms the packet/task bridge works before public exposure. |
-| 7 | P2 | Add Asset Ledger v0.1 | Stage 1 | Tracks manual production assets and provenance without external provider execution. |
-| 8 | P2 | Add release notes template and changelog convention | All stages | Keeps future releases repeatable and reviewable. |
-| 9 | P2 | Add first Creator Run usage feedback log | Stage 1 | Captures alpha learning before expanding exposure. |
+| 6 | P1 | Resolve GitHub Actions Node.js 20 deprecation warning | All stages | Keeps CI reliable under future GitHub Actions runner defaults. |
+| 7 | P1 | Run dependency/security audit pass | All stages | Reviews existing audit findings before wider release use. |
+| 8 | P2 | Add Asset Ledger v0.1 | Stage 1 | Tracks manual production assets and provenance without external provider execution. |
+| 9 | P2 | Add release notes template and changelog convention | All stages | Keeps future releases repeatable and reviewable. |
+| 10 | P2 | Add first Creator Run usage feedback log | Stage 1 | Captures alpha learning before expanding exposure. |
 
 ## Assumptions
 

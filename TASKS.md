@@ -17,7 +17,6 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Enable default branch protection with required CI checks | Repository hardening | All stages | GitHub branch settings, CI workflow | `master` requires the `Validate app` check before merge. |
 | P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
@@ -27,6 +26,8 @@ Current release posture:
 | P1 | Split `/content` subfeature visibility | Public readiness | Stages 2-3 | `src/app/content/page.tsx`, content actions | Monetization and beta-only controls hide for public users while manual public MVP content workflow remains available. |
 | P1 | Validate Creator Run v0.1 on first real content run | Private creator workflow | Stage 1 | `/content`, task board, production packet markdown export | One content item produces a packet, manual production tasks, publishing prep, and metrics reminder without external providers. |
 | P1 | Review public MVP copy | Trust and ecosystem | Stage 3 | UI copy, release docs | Copy describes drafts, review, manual publishing, and user-entered metrics accurately. |
+| P1 | Resolve GitHub Actions Node.js 20 deprecation warning | Repository hardening | All stages | `.github/workflows/ci.yml`, GitHub Actions | CI remains compatible with upcoming GitHub Actions runner defaults. |
+| P1 | Run dependency/security audit pass | Repository hardening | All stages | `package-lock.json`, dependency tree | Audit findings are reviewed and remediated or explicitly accepted. |
 | P2 | Harden backup restore confirmation | Data safety | Stages 1-3 | Settings restore UI/actions | Restore remains private/beta or requires stronger confirmation before public release. |
 | P2 | Partner provider controls | Partner readiness | Stage 4 | Provider runtime, visual engine, music-video builder | Provider cost, readiness, certification, and payload checks are documented and gated. |
 | P2 | Automation approval hardening | Advanced readiness | Stage 5 | Autonomy, worker, execution queue | Advanced automation requires approvals, locks, logs, stop conditions, and rollback evidence. |
@@ -56,6 +57,9 @@ Current release posture:
 - Published `v1.7.0-alpha.2` as a GitHub pre-release, not a stable release.
 - Verified the `v1.7.0-alpha.2` source archive scan returned no unsafe artifacts.
 - Created hardening issues #2 through #13.
+- Enabled `master` branch protection requiring `Validate app` before merge.
+- Closed issue #2 after branch protection verification.
+- Created issue #14 for GitHub Actions Node.js 20 deprecation follow-up.
 - Force-pushed the approved rewritten remote branches and tags, verified a fresh remote clone has no database artifacts, and verified the downloaded `v1.6.0` source archive contains no database artifacts.
 - Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.
 - Added content pipeline roadmap, schema, actions, UI, backup coverage, and tests in the prior content MVP slice.
@@ -78,6 +82,7 @@ Current release posture:
 ## Current Blockers
 
 - Direct `npx prisma db push` still fails with a Prisma schema-engine error. Use migrations, `npx prisma validate`, `npx prisma generate`, and guarded Playwright DB setup for validation.
-- `npm audit` reports 7 dependency findings, 5 moderate and 2 high; dependency remediation is deferred unless it blocks release approval.
+- `npm audit` reports 7 dependency findings, 5 moderate and 2 high; dependency remediation is tracked in issue #9.
+- GitHub Actions Node.js 20 deprecation warning is tracked in issue #14.
 - External integrations require credentials, provider/platform policy review, and explicit approval.
 - Public deployment must not proceed until route/API/action gates match `FEATURE_GATING.md`.
