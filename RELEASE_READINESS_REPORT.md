@@ -41,6 +41,20 @@ Database inspection was limited to table names and row counts. No row contents w
 - Updated `.gitignore` with database, environment, build/test, generated asset, and local creator asset ignore rules.
 - Preserved `.env.example` as the committed safe placeholder file.
 - Removed `dev.db` from Git tracking with `git rm --cached`; the local file remains on disk.
+- Recorded the release history blocker in `agentops/BLOCKERS.md`.
+
+## Files Changed
+
+- `.gitignore`
+- `RELEASE_READINESS_REPORT.md`
+- `agentops/BLOCKERS.md`
+- `dev.db` removed from Git tracking only; local file preserved and ignored
+
+## Commits Created
+
+- `chore: sanitize repository release inputs`
+- `docs: record release history blocker`
+- `docs: finalize release readiness report`
 
 ## Validation Commands Run
 
