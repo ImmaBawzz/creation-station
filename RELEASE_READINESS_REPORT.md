@@ -6,11 +6,11 @@ Report date: 2026-05-11
 
 ## Status
 
-Remote history cleanup is complete and verified. Release preparation has resumed on `release/v1.7.0-alpha.2-creator-run` for the `Creation Station v1.7.0-alpha.2 - Creator Run v0.1` pre-release candidate.
+Remote history cleanup is complete and verified. PR #1 was reviewed, squash-merged into `master`, validated on the default branch, tagged, and published as the `Creation Station v1.7.0-alpha.2 - Creator Run v0.1` GitHub pre-release.
 
 The previous `dev.db` history blocker is resolved for local history, remote branch/tag history, the fresh remote clone, the remote `v1.6.0` tag tree, and the downloaded `v1.6.0` GitHub source archive.
 
-No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release has been created in this cycle.
+No stable `v1.7.0` release was created. `v1.6.0` remains published as the stable release line.
 
 ## Release Prep Results
 
@@ -24,6 +24,14 @@ No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release ha
 - Branch push: completed.
 - Pull request: `https://github.com/ImmaBawzz/creation-station/pull/1`
 - GitHub Actions CI: passed on PR #1 after fixing clean-checkout lockfile sync, dynamic route context types, and FFprobe test determinism.
+- PR merge: completed with squash merge.
+- Default branch: `master` at release merge commit `1e4eb8b56a87ecc316d94b6b2ab279bd51646ca9`.
+- Tag: `v1.7.0-alpha.2` created and pushed.
+- Tag object: `8380aa70644a8001670fab2b051780d43120b2db`.
+- Tagged commit: `1e4eb8b56a87ecc316d94b6b2ab279bd51646ca9`.
+- GitHub pre-release: `https://github.com/ImmaBawzz/creation-station/releases/tag/v1.7.0-alpha.2`.
+- Archive safety check path: `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-v1.7.0-alpha.2-archive-check`.
+- `v1.7.0-alpha.2` source archive unsafe artifact scan: passed, no output.
 
 ## Local History Cleanup Results
 
@@ -138,6 +146,11 @@ Database inspection was limited to table names and row counts. No row contents w
 - Added `HISTORY_CLEANUP_PLAN.md` with verification results and future push commands.
 - Force-pushed the rewritten affected remote branches and tags with explicit leases.
 - Verified a fresh remote clone and the `v1.6.0` source archive contain no database artifacts.
+- Merged PR #1 into `master` with squash merge.
+- Created and pushed `v1.7.0-alpha.2` as an annotated tag.
+- Published `v1.7.0-alpha.2` as a GitHub pre-release.
+- Verified the downloaded `v1.7.0-alpha.2` source archive contains no database artifacts, env files, generated media folders, build/test artifacts, local input/output folders, or backup bundles matching the release scan.
+- Created follow-up hardening issues #2 through #13.
 
 ## Files Changed
 
@@ -208,48 +221,65 @@ Release-prep validation status:
 - GitHub Actions CI run `25696278977` - failed at `npm test` before the FFprobe test was made deterministic
 - GitHub Actions CI run `25696516405` - passed, 1m11s
 
+Final default branch validation after PR merge:
+
+- `npx prisma generate` - passed
+- `npx prisma validate` - passed
+- `npx tsc --noEmit` - passed
+- `npm run lint` - passed with 16 existing warnings
+- `npm test` - passed, 49 files and 303 tests
+- `npm run build` - passed with 2 known Turbopack/NFT tracing warnings from the music-video builder import trace
+- Unsafe tracked file scan - passed, no output
+- GitHub Actions CI run `25696656376` - passed, 1m1s
+
 ## Blockers
 
-- P0: PR is open, but no merge, new tag, or GitHub pre-release has been approved or created yet.
+- P0: Default branch protection with required CI checks is not yet enabled.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
+- P1: `npm audit` reports 7 dependency findings, 5 moderate and 2 high; dependency remediation remains deferred unless it blocks release approval.
 
 ## Remediation Plan
 
-1. Review PR #1.
-2. Do not merge, tag, or publish until separately approved.
+1. Enable default branch protection with required CI checks.
+2. Work the route/API/server-action gate hardening issues before public MVP exposure.
+3. Keep `v1.7.0-alpha.2` labeled and treated as an internal/private alpha pre-release.
 
-## Prepared Hardening Issues
+## Created Hardening Issues
 
 P0:
 
-- Remove tracked local database and generated artifacts
-- Add GitHub Actions CI workflow
-- Protect default branch with required CI checks
+- #2 Enable default branch protection with required CI checks: `https://github.com/ImmaBawzz/creation-station/issues/2`
 
 P1:
 
-- Add route-level feature gate enforcement
-- Add API route feature gate enforcement
-- Add server-action feature gate enforcement
-- Hide or disable monetization controls for public MVP context
-- Update public copy for manual publishing and manual metrics
+- #3 Add route-level feature gate enforcement: `https://github.com/ImmaBawzz/creation-station/issues/3`
+- #4 Add API route feature gate enforcement: `https://github.com/ImmaBawzz/creation-station/issues/4`
+- #5 Add server-action feature gate enforcement: `https://github.com/ImmaBawzz/creation-station/issues/5`
+- #6 Refine public MVP content subfeature visibility: `https://github.com/ImmaBawzz/creation-station/issues/6`
+- #7 Hide or disable monetization controls in public MVP context: `https://github.com/ImmaBawzz/creation-station/issues/7`
+- #8 Add gate-context smoke tests for internal/private/beta/public/partner contexts: `https://github.com/ImmaBawzz/creation-station/issues/8`
+- #9 Add dependency/security audit pass: `https://github.com/ImmaBawzz/creation-station/issues/9`
 
 P2:
 
-- Add Asset Ledger v0.1 for music, image, video, thumbnail, prompt, and voiceover tracking
-- Add release notes template and changelog convention
-- Add GitHub Project board for release stages
-- Add gate-context smoke tests for internal, private creator, invite beta, public MVP, and partner contexts
+- #10 Add Asset Ledger v0.1 for music, images, video, prompts, voiceover, and thumbnails: `https://github.com/ImmaBawzz/creation-station/issues/10`
+- #11 Add release notes template and changelog convention: `https://github.com/ImmaBawzz/creation-station/issues/11`
+- #12 Add GitHub Project board for staged release tracking: `https://github.com/ImmaBawzz/creation-station/issues/12`
+- #13 Add first Creator Run usage feedback log: `https://github.com/ImmaBawzz/creation-station/issues/13`
+
+Custom labels `release-hardening`, `feature-gating`, `public-mvp`, `creator-run`, `priority:p0`, `priority:p1`, and `priority:p2` were not present, so issues were created without labels.
 
 ## Release Outcome
 
 - Branch created: `release/v1.7.0-alpha.2-creator-run`
 - Pull request created: `https://github.com/ImmaBawzz/creation-station/pull/1`
-- Tag created: no new release tag; existing local tags were rewritten by history cleanup
-- GitHub release created: no
-- Pre-release status: not created
+- Pull request merged: yes, squash merge into `master`
+- Tag created: `v1.7.0-alpha.2`
+- GitHub release created: `https://github.com/ImmaBawzz/creation-station/releases/tag/v1.7.0-alpha.2`
+- Pre-release status: `true`
 - Stable `v1.6.0` GitHub release status: still published as stable/latest; source archive verified clean after tag rewrite
+- Stable `v1.7.0` release status: not created
 
 ## Intentionally Deferred
 
@@ -265,4 +295,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Review PR #1. Do not create the tag or GitHub release in this cycle.
+Enable default branch protection with required CI checks, then validate Creator Run v0.1 with the first real internal/private content run.

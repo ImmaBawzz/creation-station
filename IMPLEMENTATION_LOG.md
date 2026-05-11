@@ -1,5 +1,47 @@
 # Implementation Log
 
+## 2026-05-11 - v1.7.0-alpha.2 Pre-release Publication
+
+Requested outcome:
+
+- Review PR #1.
+- Merge only if safe.
+- Validate the default branch.
+- Create and publish `v1.7.0-alpha.2` as a GitHub pre-release only.
+- Verify release archive safety.
+- Create follow-up hardening issues.
+
+Completed:
+
+- Reviewed PR #1 metadata, changed files, README/release notes posture, CI status, and unsafe tracked-file scan.
+- Squash-merged PR #1 into `master`.
+- Validated `master` at release merge commit `1e4eb8b56a87ecc316d94b6b2ab279bd51646ca9`.
+- Created and pushed annotated tag `v1.7.0-alpha.2`.
+- Published GitHub pre-release: `https://github.com/ImmaBawzz/creation-station/releases/tag/v1.7.0-alpha.2`.
+- Verified `v1.6.0` still exists as a non-prerelease release.
+- Confirmed no stable `v1.7.0` release exists.
+- Downloaded and scanned the `v1.7.0-alpha.2` source archive at `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-v1.7.0-alpha.2-archive-check`; no unsafe artifacts were found.
+- Created hardening issues #2 through #13.
+
+Validation:
+
+- `npx prisma generate`: passed.
+- `npx prisma validate`: passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed with 16 existing warnings.
+- `npm test`: passed, 49 files and 303 tests.
+- `npm run build`: passed with 2 known Turbopack/NFT tracing warnings from the music-video builder import trace.
+- Unsafe tracked-file scan: passed, no output.
+- GitHub Actions CI: `Validate app` passed on PR #1 and the merge branch.
+
+Known risks and deferred work:
+
+- `v1.7.0-alpha.2` is a pre-release only, not a stable `v1.7.0` release.
+- Branch protection with required CI checks still needs to be enabled.
+- Route/API/server-action gate hardening remains required before public MVP exposure.
+- Monetization controls must remain private/beta-safe.
+- Dependency audit remediation remains tracked separately.
+
 ## 2026-05-11 - v1.7.0-alpha.2 Release Prep
 
 Requested outcome:

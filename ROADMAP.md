@@ -37,13 +37,15 @@ The roadmap now tracks two dimensions:
 - Basic feature-gating registry exists with release stages, access levels, feature flags, and sidebar navigation filtering.
 - Local reachable Git history has been rewritten to remove `dev.db`; local verification shows no database artifacts in history, tracked files, or the local `v1.6.0` tag tree.
 - Remote GitHub branch/tag history has been force-pushed with the rewritten cleanup refs; a fresh clone and the `v1.6.0` source archive no longer expose database artifacts.
+- `v1.7.0-alpha.2` has been published as a GitHub pre-release for Creator Run v0.1.
+- Follow-up hardening issues #2 through #13 have been created.
 
 ### In Progress
 
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- Review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR, after GitHub Actions CI passed.
+- Post-release hardening for branch protection, gate enforcement, public MVP visibility, and dependency audit.
 
 ### Missing Before Public MVP
 
@@ -82,15 +84,15 @@ The roadmap now tracks two dimensions:
 | Order | Priority | Task | Stage | Reason |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | Keep release docs and feature audit current | Stages 0-6 | Prevents accidental scope expansion. |
-| 1a | P0 | Review `v1.7.0-alpha.2` release-prep PR | Stage 1 | CI has passed; review PR #1 without tagging or releasing. |
+| 1a | P0 | Enable default branch protection with required CI checks | All stages | Prevents unsafe merges after release publication. |
 | 2 | P1 | Add route-level page gates | Stage 3 | Navigation gating alone is insufficient for public release. |
 | 3 | P1 | Add server-action and API gates | Stage 3 | Hidden workflows must not be callable directly. |
 | 4 | P1 | Add gate-context smoke tests | Stages 1-4 | Ensures staged release behavior does not regress. |
 | 5 | P1 | Gate `/content` monetization controls separately | Stages 2-3 | Public MVP can include manual content workflow without beta monetization exposure. |
 | 6 | P1 | Validate Creator Run v0.1 with one real internal content run | Stage 1 | Confirms the packet/task bridge works before public exposure. |
-| 7 | P2 | Add public MVP copy pass | Stage 3 | Reduces trust and ecosystem confusion. |
-| 8 | P2 | Harden partner provider controls | Stage 4 | Cost/runtime/provider risks need controls before partner release. |
-| 9 | P2 | Harden automation approvals and rollback | Stage 5 | Automation should not ship without audit and recovery. |
+| 7 | P2 | Add Asset Ledger v0.1 | Stage 1 | Tracks manual production assets and provenance without external provider execution. |
+| 8 | P2 | Add release notes template and changelog convention | All stages | Keeps future releases repeatable and reviewable. |
+| 9 | P2 | Add first Creator Run usage feedback log | Stage 1 | Captures alpha learning before expanding exposure. |
 
 ## Assumptions
 
