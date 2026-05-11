@@ -49,13 +49,13 @@ Creator Run v0.1 is manual-first and local-first. It does not call external medi
 
 Validated locally in this release-prep cycle:
 
-- `npm ci` - passed after synchronizing `package-lock.json`; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this alpha prep cycle
+- `npx npm@10.8.2 ci` - passed after synchronizing `package-lock.json` for the CI npm version; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this alpha prep cycle
 - `npx prisma generate` - passed
 - `npx prisma validate` - passed
 - `npx tsc --noEmit` - passed
 - `npm run lint` - passed with 16 existing warnings
 - `npm test` - passed, 49 files and 303 tests
-- `npm run build` - passed with known Turbopack/NFT tracing warnings from the music-video builder import trace
+- `npm run build` - passed with 1 known Turbopack/NFT tracing warning from the music-video builder import trace
 - Unsafe tracked file scan - passed, no output
 
 ## Repository Hygiene
@@ -65,7 +65,7 @@ Validated locally in this release-prep cycle:
 - The `v1.6.0` source archive was verified clean after the tag rewrite.
 - A local ignored `dev.db` may still exist for development.
 - The pre-cleanup bundle is sensitive and must remain private.
-- The initial PR CI run failed at `npm ci` due to lockfile drift; `package-lock.json` was synchronized before continuing release prep.
+- The initial PR CI runs failed at `npm ci` due to lockfile drift under the CI npm version; `package-lock.json` was synchronized with `npx npm@10.8.2 install --package-lock-only` before continuing release prep.
 
 ## Release Boundaries
 

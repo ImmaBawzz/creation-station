@@ -5,7 +5,7 @@
 - Prepared `v1.7.0-alpha.2` as an internal/private Creator Run pre-release candidate.
 - Updated README positioning around local-first manual creator workflows.
 - Added GitHub Actions CI for deterministic repository validation.
-- Synchronized `package-lock.json` so CI can run `npm ci` from a clean checkout.
+- Synchronized `package-lock.json` with npm 10.8.2 so CI can run `npm ci` from a clean checkout.
 - Ran local validation for the release-prep branch.
 
 ## Creation Station v1.7.0-alpha.2 — Creator Run v0.1
@@ -22,7 +22,7 @@ Status: pre-release / internal-private alpha.
 - Markdown export for Production Packets.
 - Repository validation workflow.
 - Release readiness report with validation results.
-- Lockfile synchronization for clean CI installs.
+- Lockfile synchronization for clean CI installs under the GitHub Actions npm version.
 
 ### Changed
 

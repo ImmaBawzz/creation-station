@@ -20,20 +20,20 @@ Completed so far:
 - Added `CHANGELOG.md`.
 - Pushed `release/v1.7.0-alpha.2-creator-run`.
 - Opened PR #1: `https://github.com/ImmaBawzz/creation-station/pull/1`.
-- Investigated the first GitHub Actions failure at `npm ci`.
-- Synchronized `package-lock.json` with `npm install --package-lock-only` so clean installs include the optional Tailwind WASM dependency entries required by npm.
+- Investigated the first two GitHub Actions failures at `npm ci`.
+- Synchronized `package-lock.json` with `npx npm@10.8.2 install --package-lock-only` so clean installs include the optional Tailwind WASM dependency entries required by the CI npm version.
 
 Validation:
 
-- `npm ci`: passed after lockfile synchronization; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this release-prep cycle.
+- `npx npm@10.8.2 ci`: passed after lockfile synchronization; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this release-prep cycle.
 - `npx prisma generate`: passed.
 - `npx prisma validate`: passed.
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed with 16 existing warnings outside this release-doc change.
 - `npm test`: passed, 49 files and 303 tests.
-- `npm run build`: passed with known Turbopack/NFT tracing warnings from the music-video builder import trace.
+- `npm run build`: passed with 1 known Turbopack/NFT tracing warning from the music-video builder import trace.
 - Unsafe tracked file scan: passed, no output.
-- GitHub Actions CI: initial run failed at `npm ci` before lockfile synchronization; rerun is required after pushing the fix.
+- GitHub Actions CI: runs `25695318602` and `25695743347` failed at `npm ci` before npm 10 lockfile synchronization; rerun is required after pushing the fix.
 
 Known risks and deferred work:
 

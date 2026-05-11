@@ -23,7 +23,7 @@ No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release ha
 - Unsafe tracked file scan: passed, no output.
 - Branch push: completed.
 - Pull request: `https://github.com/ImmaBawzz/creation-station/pull/1`
-- GitHub Actions CI: initial run failed at `npm ci` because `package-lock.json` was missing optional Tailwind WASM dependency entries; `package-lock.json` was synchronized and a rerun is expected after the fix is pushed.
+- GitHub Actions CI: the first two runs failed at `npm ci` because `package-lock.json` was missing optional Tailwind WASM dependency entries for the CI npm version; `package-lock.json` was regenerated with `npx npm@10.8.2 install --package-lock-only` and a rerun is required after that fix is pushed.
 
 ## Local History Cleanup Results
 
@@ -189,25 +189,25 @@ Database inspection was limited to table names and row counts. No row contents w
 
 Release-prep validation status:
 
-- `npm ci` - passed after synchronizing `package-lock.json`; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this release-prep cycle
+- `npx npm@10.8.2 ci` - passed after synchronizing `package-lock.json` for the CI npm version; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this release-prep cycle
 - `npx prisma generate` - passed
 - `npx prisma validate` - passed
 - `npx tsc --noEmit` - passed
 - `npm run lint` - passed with 16 existing warnings
 - `npm test` - passed, 49 files and 303 tests
-- `npm run build` - passed with known Turbopack/NFT tracing warnings from the music-video builder import trace
+- `npm run build` - passed with 1 known Turbopack/NFT tracing warning from the music-video builder import trace
 - Unsafe tracked file scan - passed, no output
-- GitHub Actions CI initial run `25695318602` - failed at `npm ci` before the lockfile synchronization fix
+- GitHub Actions CI runs `25695318602` and `25695743347` - failed at `npm ci` before the npm 10 lockfile synchronization fix
 
 ## Blockers
 
-- P0: PR is open; CI must be rechecked after the lockfile synchronization fix before any merge, new tag, or GitHub pre-release decision.
+- P0: PR is open; CI must be rechecked after the npm 10 lockfile synchronization fix before any merge, new tag, or GitHub pre-release decision.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Push the lockfile synchronization fix and wait for GitHub Actions CI to rerun on PR #1.
+1. Push the npm 10 lockfile synchronization fix and wait for GitHub Actions CI to rerun on PR #1.
 2. Review the PR.
 3. Do not merge, tag, or publish until separately approved.
 
@@ -257,4 +257,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Push the lockfile synchronization fix, wait for GitHub Actions CI to rerun on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.
+Push the npm 10 lockfile synchronization fix, wait for GitHub Actions CI to rerun on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.

@@ -6,7 +6,7 @@ Last updated: 2026-05-11T20:20:44Z
 
 - Direct `npx prisma db push` still exits with a Prisma schema-engine error for local SQLite URLs, even though `npx prisma validate` and `npx prisma generate` pass.
 - `v1.7.0-alpha.2` must not be tagged or published until the release-prep PR is reviewed and a separate release approval is given.
-- GitHub Actions CI must rerun after the `package-lock.json` synchronization fix; the first PR run failed at `npm ci`.
+- GitHub Actions CI must rerun after the npm 10 `package-lock.json` synchronization fix; the first PR runs failed at `npm ci`.
 
 ## Watch
 
