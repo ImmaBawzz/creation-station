@@ -28,10 +28,41 @@ Validation:
 
 Known risks and deferred work:
 
-- Remote GitHub branches/tags still contain the old history until owner-approved force-push/tag rewrite occurs.
-- The existing GitHub `v1.6.0` release archive must be rechecked after the remote tag rewrite.
+- Remote GitHub branch/tag cleanup and `v1.6.0` source archive verification were completed in the later remote cleanup pass.
 - No force-push, remote tag rewrite, release deletion, release recreation, or release publication was performed.
 - README, CI, PR, and `v1.7.0-alpha.2` release prep remain deferred until remote repository safety is resolved.
+
+## 2026-05-11 - Remote Database History Cleanup
+
+Requested outcome:
+
+- Force-push the approved rewritten branches with explicit leases.
+- Force-push only the affected rewritten remote tags with explicit leases.
+- Verify the remote repository from a fresh clone.
+- Verify the remote `v1.6.0` tag/source archive no longer contains `dev.db`.
+- Stop before README, CI, PR, tag, or release creation.
+
+Completed:
+
+- Force-pushed `master`, `feature/v1.6-intelligence-layer`, `feature/visual-engine-integration-audit`, `release/v1.6-stable-backup`, and `v1.8/operator-ux-pass`.
+- Force-pushed affected remote tags: `v0.5-working-core`, `v0.5.1-stabilized`, `v1.0-release-candidate`, `v1.0.0`, `v1.1-rc.1`, `v1.1.0`, `v1.5.0`, `v1.5.0-rc1`, `v1.6.0`, `v1.7.0-alpha`, and `v1.7.0-alpha.1`.
+- Did not push `creator-run-v0.1-internal` because it was not confirmed as an existing remote tag.
+- Created a fresh verification clone at `C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-remote-clean-check-20260511-2159`.
+- Downloaded and inspected the GitHub `v1.6.0` source archive after tag rewrite.
+
+Validation:
+
+- Fresh clone `git log --all -- dev.db`: passed, no output.
+- Fresh clone database artifact object scan: passed, no output.
+- Fresh clone tracked database artifact scan: passed, no output.
+- Fresh clone `v1.6.0` tree database artifact scan: passed, no output.
+- Downloaded `v1.6.0` source archive database artifact scan: passed, no output.
+
+Known risks and deferred work:
+
+- The sensitive pre-cleanup bundle still exists locally and must not be committed or uploaded.
+- No README, CI, PR, `v1.7.0-alpha.2` tag, GitHub release, stable `v1.7.0` release, release deletion, or release recreation was performed.
+- Release preparation can resume in a separate approved cycle as a pre-release only.
 
 ## 2026-05-11 - Creator Run v0.1 Production Packet Bridge
 

@@ -6,9 +6,9 @@ Report date: 2026-05-11
 
 ## Status
 
-Local history cleanup is complete and verified. Release preparation remains stopped before README update, PR, tag, or release because the cleaned history has not been force-pushed to GitHub and remote tag/release archive cleanup has not been approved.
+Remote history cleanup is complete and verified. Release preparation remains stopped before README update, PR, tag, or release because this cycle was limited to remote repository safety cleanup.
 
-P0 remote blocker: `dev.db` has been removed from all reachable local history, but the public GitHub remote and existing GitHub release/tag archives still need an explicitly approved force-push/tag rewrite before any `v1.7.0-alpha.2` pre-release work continues.
+The previous `dev.db` history blocker is resolved for local history, remote branch/tag history, the fresh remote clone, the remote `v1.6.0` tag tree, and the downloaded `v1.6.0` GitHub source archive.
 
 ## Local History Cleanup Results
 
@@ -17,8 +17,8 @@ P0 remote blocker: `dev.db` has been removed from all reachable local history, b
 - `git-filter-repo` installed and verified: `a40bce548d2c`
 - Local rewrite command used: `git filter-repo --force --path dev.db --invert-paths`
 - `origin` remote was restored after `git-filter-repo` removed it
-- No remote force-push was performed
-- No remote tag rewrite was performed
+- Remote force-push was performed later in the approved remote cleanup stage
+- Remote tag rewrite was performed later in the approved remote cleanup stage
 - No GitHub release was deleted, recreated, or published
 - No `v1.7.0-alpha.2` tag or release was created
 
@@ -30,6 +30,55 @@ Post-cleanup verification:
 - Local `v1.6.0` tag was rewritten and its tree no longer contains `dev.db`
 - Rewritten `v1.6.0` tag object: `c25d3be183eeef9c900ed68ae709636a267c1632`
 - Rewritten `v1.6.0` commit: `902489e6347e7a3855b3274ea21bc15a785c31be`
+
+## Remote Cleanup Results
+
+Branches force-pushed with explicit leases:
+
+- `master`: `d7b87f55917e86de53045ab7cd032cbc071022ba` -> `4917ba4323a59958cacd07ceeffc6963dcf222db`
+- `feature/v1.6-intelligence-layer`: `ed2c56cf843da1b7c6402cfc8904a77c29ac87f0` -> `c75efbdbbe1d9b3b510b23b9935d79be5e0f827c`
+- `feature/visual-engine-integration-audit`: `c10bc6867975fb6b89bba8460e73a79be4d15ab3` -> `73cc6f17e8b207a7eaafb753c5e64a031aa60301`
+- `release/v1.6-stable-backup`: `ed2c56cf843da1b7c6402cfc8904a77c29ac87f0` -> `c75efbdbbe1d9b3b510b23b9935d79be5e0f827c`
+- `v1.8/operator-ux-pass`: `a8997f6cabb0e784f516398fabce25c41cd5c1c1` -> `e20d5edd5c677de30301132935f4c1ead7d52dd2`
+
+Tags force-pushed with explicit leases:
+
+- `v0.5-working-core`
+- `v0.5.1-stabilized`
+- `v1.0-release-candidate`
+- `v1.0.0`
+- `v1.1-rc.1`
+- `v1.1.0`
+- `v1.5.0`
+- `v1.5.0-rc1`
+- `v1.6.0`
+- `v1.7.0-alpha`
+- `v1.7.0-alpha.1`
+
+`creator-run-v0.1-internal` was not pushed because it was not confirmed as an existing remote tag.
+
+Fresh clone verification path:
+
+`C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-remote-clean-check-20260511-2159`
+
+Fresh clone verification:
+
+- `git log --all -- dev.db`: no output
+- `git rev-list --objects --all` database artifact scan: no output
+- `git ls-files` database artifact scan: no output
+- `git ls-tree -r v1.6.0 --name-only` database artifact scan: no output
+- Fresh clone `HEAD`: `4917ba4323a59958cacd07ceeffc6963dcf222db`
+- Fresh clone `v1.6.0` tag object: `c25d3be183eeef9c900ed68ae709636a267c1632`
+- Fresh clone `v1.6.0` commit: `902489e6347e7a3855b3274ea21bc15a785c31be`
+
+GitHub `v1.6.0` release/source archive:
+
+- Release URL: `https://github.com/ImmaBawzz/creation-station/releases/tag/v1.6.0`
+- Draft: `false`
+- Prerelease: `false`
+- Immutable: `false`
+- Published: `2026-05-07T02:10:37Z`
+- Downloaded source archive after tag rewrite: no database artifacts found
 
 Current rewritten release-readiness commits:
 
@@ -45,14 +94,14 @@ Current rewritten release-readiness commits:
 - Default branch: `master`
 - Remote URL: `https://github.com/ImmaBawzz/creation-station.git`
 - GitHub visibility: public, detected with GitHub CLI before local rewrite
-- Existing GitHub release: `Creation Station v1.6.0` remains the latest stable release on GitHub until remote cleanup is approved
+- Existing GitHub release: `Creation Station v1.6.0` remains the latest stable release on GitHub
 - Pre-cleanup Creator Run commit: `d1ddbfe feat: add creator run production packet workflow`
 - Current rewritten Creator Run commit: `9f792d4 feat: add creator run production packet workflow`
 - Existing local tags include `creator-run-v0.1-internal`, `v1.7.0-alpha`, `v1.7.0-alpha.1`, and `v1.6.0`
 - Dirty worktree before sanitation: modified tracked `dev.db`
 - Creator Run / Production Packet work appears committed in rewritten history at `9f792d4`
 - Creator Run / Production Packet work does not appear pushed to origin; it is on a local branch/tag only
-- Remote-tracking refs were removed by `git-filter-repo`; do not fetch before the approved remote cleanup push
+- Remote cleanup has been force-pushed and verified from a fresh clone
 
 ## Phase 1 Hygiene Findings
 
@@ -62,7 +111,7 @@ Tracked unsafe files scan originally found:
 - `.env.example` - tracked example env file; safe placeholder file
 - `src/modules/provider-runtime/readiness/credentialReadiness.ts` - source file path matched the word `credential`; not a secret artifact by itself
 
-Database inspection was limited to table names and row counts. No row contents were dumped. The pre-cleanup tracked `dev.db` contained local workflow records including ideas, factory plans, tasks, activity, and execution rows. Because this repository is public, this remains a remote sensitive data/history concern until the cleaned history is pushed and remote tags/releases are handled.
+Database inspection was limited to table names and row counts. No row contents were dumped. The pre-cleanup tracked `dev.db` contained local workflow records including ideas, factory plans, tasks, activity, and execution rows. The cleaned history has now been pushed and verified remotely.
 
 ## Changes Made
 
@@ -72,6 +121,8 @@ Database inspection was limited to table names and row counts. No row contents w
 - Recorded the release history blocker in `agentops/BLOCKERS.md`.
 - Rewrote local reachable history to remove `dev.db`.
 - Added `HISTORY_CLEANUP_PLAN.md` with verification results and future push commands.
+- Force-pushed the rewritten affected remote branches and tags with explicit leases.
+- Verified a fresh remote clone and the `v1.6.0` source archive contain no database artifacts.
 
 ## Files Changed
 
@@ -89,7 +140,8 @@ Database inspection was limited to table names and row counts. No row contents w
 - `0819fa1 chore: sanitize repository release inputs`
 - `79db782 docs: record release history blocker`
 - `9db2384 docs: finalize release readiness report`
-- `docs: record local database history cleanup`
+- `9d30d21 docs: record local database history cleanup`
+- `docs: record remote database history cleanup`
 
 ## Validation Commands Run
 
@@ -110,25 +162,27 @@ Database inspection was limited to table names and row counts. No row contents w
 - `git rev-list --objects --all | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'` - passed after rewrite, no output
 - `git ls-files | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'` - passed after rewrite, no output
 - `git ls-tree -r --name-only v1.6.0^{tree} | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'` - passed after rewrite, no output
+- Remote branch force-push commands with explicit leases - passed
+- Remote tag force-push commands with explicit leases - passed
+- Fresh clone database artifact scans - passed, no output
+- GitHub `v1.6.0` source archive database artifact scan - passed, no output
 
-Full app validation (`npx prisma generate`, `npx prisma validate`, `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`) remains intentionally deferred until remote history cleanup is approved and completed.
+Full app validation (`npx prisma generate`, `npx prisma validate`, `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`) remains intentionally deferred until README/release-preparation work resumes.
 
 ## Blockers
 
-- P0: Remote GitHub history and release/tag archives still contain the pre-cleanup history until an approved force-push/tag rewrite occurs.
-- P0: The current local release branch has not been created because release preparation is still stopped before Phase 2.
+- P0: The current local release branch has not been created because this cycle was limited to remote cleanup.
 - P0: No pull request, merge, new tag, or GitHub pre-release was created.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Review `HISTORY_CLEANUP_PLAN.md` and local verification results.
-2. If approved, force-push rewritten branches and tags with the documented commands.
-3. Verify the remote no longer exposes `dev.db` through branch or tag history.
-4. Review the existing `v1.6.0` GitHub release archive behavior after tag rewrite.
-5. After remote remediation, re-run the full release checklist from Phase 0.
-6. Only then create `release/v1.7.0-alpha.2-creator-run`, add CI/release docs if still needed, validate, open the PR, merge, tag `v1.7.0-alpha.2`, and create a GitHub pre-release.
+1. Resume release preparation in a separate approved cycle.
+2. Update README and release docs for the staged local-first Creator Run pre-release.
+3. Add CI if still missing.
+4. Run full local validation.
+5. Create `release/v1.7.0-alpha.2-creator-run`, open a PR, and do not merge/tag/release unless validation passes.
 
 ## Prepared Hardening Issues
 
@@ -160,7 +214,7 @@ P2:
 - Tag created: no new release tag; existing local tags were rewritten by history cleanup
 - GitHub release created: no
 - Pre-release status: not created
-- Stable `v1.6.0` GitHub release status: unchanged remotely
+- Stable `v1.6.0` GitHub release status: still published as stable/latest; source archive verified clean after tag rewrite
 
 ## Intentionally Deferred
 
@@ -176,4 +230,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Review the local cleanup results and decide whether to approve the documented remote force-push/tag rewrite. Release work should resume only after remote cleanup is complete and verified.
+Remote cleanup is complete. The next smallest safe step is to resume README, CI, and release-preparation work for `v1.7.0-alpha.2` as a pre-release only.

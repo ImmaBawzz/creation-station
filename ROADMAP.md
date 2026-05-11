@@ -36,13 +36,14 @@ The roadmap now tracks two dimensions:
 - Creator Run v0.1 exists as an internal/private bridge that creates a deterministic production packet draft and manual production task set from a content item.
 - Basic feature-gating registry exists with release stages, access levels, feature flags, and sidebar navigation filtering.
 - Local reachable Git history has been rewritten to remove `dev.db`; local verification shows no database artifacts in history, tracked files, or the local `v1.6.0` tag tree.
+- Remote GitHub branch/tag history has been force-pushed with the rewritten cleanup refs; a fresh clone and the `v1.6.0` source archive no longer expose database artifacts.
 
 ### In Progress
 
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- Remote repository safety cleanup for `dev.db` history before `v1.7.0-alpha.2` release prep resumes.
+- README, CI, release notes, validation, and release branch preparation for `v1.7.0-alpha.2` as a pre-release only.
 
 ### Missing Before Public MVP
 
@@ -55,7 +56,6 @@ The roadmap now tracks two dimensions:
 
 ### Blocked
 
-- `v1.7.0-alpha.2` release preparation is blocked until owner-approved remote force-push/tag rewrite removes the old `dev.db` history from GitHub and existing release archive risk is rechecked.
 - Direct `npx prisma db push` still fails with a Prisma schema-engine error.
 - External publishing, imported analytics, affiliate APIs, payment integrations, and cloud/team features require future credentials, policy review, and explicit approval.
 

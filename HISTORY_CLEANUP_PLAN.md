@@ -1,10 +1,10 @@
 # History Cleanup Plan
 
-Last updated: 2026-05-11T19:52:28Z
+Last updated: 2026-05-11T20:07:26Z
 
 ## Status
 
-Local history cleanup is complete. No remote force-push, remote tag rewrite, GitHub release deletion, GitHub release recreation, or `v1.7.0-alpha.2` release action has been performed.
+Remote history cleanup is complete and verified. The approved branches and existing remote release tags were force-pushed with explicit leases. No GitHub release was deleted or recreated, and no `v1.7.0-alpha.2` release action has been performed.
 
 The local repository history was rewritten with `git-filter-repo` to remove `dev.db` from all reachable local refs. The pre-cleanup history is preserved in a sensitive local bundle:
 
@@ -96,7 +96,7 @@ Tags:
 
 Remote-tracking refs were removed by `git-filter-repo`; `origin` was restored as a remote URL only. Do not run `git fetch` before the approved remote cleanup push, because fetching the current remote would reintroduce unsafe remote-tracking refs into local history scans.
 
-## GitHub / Remote Risk Still Open
+## Remote Cleanup Results
 
 Before local cleanup, GitHub CLI reported:
 
@@ -107,7 +107,51 @@ Before local cleanup, GitHub CLI reported:
 - Detected collaborator: owner account `ImmaBawzz`
 - GitHub CLI authentication: active
 
-The remote repository and existing GitHub release archives are not cleaned yet. The published `v1.6.0` GitHub release currently points to the old remote tag until an approved force-push rewrites that tag on GitHub. Do not delete or recreate the release without separate explicit confirmation.
+Remote branches force-pushed with explicit leases:
+
+- `master`: `d7b87f55917e86de53045ab7cd032cbc071022ba` -> `4917ba4323a59958cacd07ceeffc6963dcf222db`
+- `feature/v1.6-intelligence-layer`: `ed2c56cf843da1b7c6402cfc8904a77c29ac87f0` -> `c75efbdbbe1d9b3b510b23b9935d79be5e0f827c`
+- `feature/visual-engine-integration-audit`: `c10bc6867975fb6b89bba8460e73a79be4d15ab3` -> `73cc6f17e8b207a7eaafb753c5e64a031aa60301`
+- `release/v1.6-stable-backup`: `ed2c56cf843da1b7c6402cfc8904a77c29ac87f0` -> `c75efbdbbe1d9b3b510b23b9935d79be5e0f827c`
+- `v1.8/operator-ux-pass`: `a8997f6cabb0e784f516398fabce25c41cd5c1c1` -> `e20d5edd5c677de30301132935f4c1ead7d52dd2`
+
+Remote tags force-pushed with explicit leases:
+
+- `v0.5-working-core`: `e7f06dd11718d944467ebbc22d090beca296cdf0` -> `2e2059aed6b92521e4dc7ca8ea38a027b4822552`
+- `v0.5.1-stabilized`: `4f704e5db5037474c85ce96d738948a319691560` -> `ba6505b86497534f8c24b6a1997ab83d34c0d974`
+- `v1.0-release-candidate`: `1437ca08eb685ec0be64283abe7d7f1d5dc5e4d5` -> `d9bb0dd193c28faeaeb278fccf51ee9f89ecb939`
+- `v1.0.0`: `f78920e04bace79c244e29bfe6cd5771265ea0c8` -> `d57f45ee65e8df9bb8d3a0f0bda313a4f15a28b2`
+- `v1.1-rc.1`: `764b39615173172a1c93d27654345ac272abbecc` -> `a41f005a8d0d06d3bcef312c454aecfbc25d50bf`
+- `v1.1.0`: `2888810313df9a176d371f0da92b59932e741855` -> `69fe70772f6fe15426ac388e53e51a8134c8f457`
+- `v1.5.0`: `52eb1cf46a841c9a44c3e572eac802ee9c07869d` -> `2d39ad58d785fcc855bb35d3d2a753323f7477c6`
+- `v1.5.0-rc1`: `52eb1cf46a841c9a44c3e572eac802ee9c07869d` -> `2d39ad58d785fcc855bb35d3d2a753323f7477c6`
+- `v1.6.0`: `9c858fc7e21d2d10203899d9def9218281fb4d90` -> `c25d3be183eeef9c900ed68ae709636a267c1632`
+- `v1.7.0-alpha`: `ca855bbf76e91316525ec20c1981c82c34fae44e` -> `c991126b50ed5c751ba8cc8fef1b77a4d92047f3`
+- `v1.7.0-alpha.1`: `67fb74911e46d6ed07150f1713dccb76dfc30abd` -> `71d4a09292723de385db72e50a6f5cfeee4f2a4c`
+
+`creator-run-v0.1-internal` was not pushed because it was not confirmed as an existing remote tag.
+
+Fresh clone verification path:
+
+`C:\Users\Shadow\Documents\AIProjects\CreationStation\creation-station-remote-clean-check-20260511-2159`
+
+Fresh clone checks all returned no output:
+
+```powershell
+git log --all -- dev.db
+git rev-list --objects --all | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'
+git ls-files | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'
+git ls-tree -r v1.6.0 --name-only | Select-String -Pattern '(^|/)(dev\.db|.*\.sqlite|.*\.sqlite3|.*\.db)$'
+```
+
+GitHub `v1.6.0` release state after cleanup:
+
+- Release URL: `https://github.com/ImmaBawzz/creation-station/releases/tag/v1.6.0`
+- Draft: `false`
+- Prerelease: `false`
+- Immutable: `false`
+- Published: `2026-05-07T02:10:37Z`
+- Source archive check: downloaded `v1.6.0.zip` after tag rewrite and found no database artifacts
 
 ## Rollback / Backup Plan
 
@@ -115,36 +159,30 @@ The remote repository and existing GitHub release archives are not cleaned yet. 
 - To inspect or recover the old state, clone the bundle into a separate directory rather than restoring it into this working repository.
 - The backup branch exists locally, but because the cleanup intentionally removed `dev.db` from all reachable refs, the branch was also rewritten. The bundle is the authoritative pre-cleanup backup.
 
-## Recommended Remote Push Commands
-
-Run these only after separate explicit approval. These commands use known pre-cleanup remote tips as leases where available.
+## Remote Push Commands Run
 
 ```powershell
-git push --force-with-lease=refs/heads/master:d7b87f5 origin master:master
-git push --force-with-lease=refs/heads/feature/v1.6-intelligence-layer:ed2c56c origin feature/v1.6-intelligence-layer:feature/v1.6-intelligence-layer
-git push --force-with-lease=refs/heads/feature/visual-engine-integration-audit:c10bc68 origin feature/visual-engine-integration-audit:feature/visual-engine-integration-audit
-git push --force-with-lease=refs/heads/release/v1.6-stable-backup:ed2c56c origin release/v1.6-stable-backup:release/v1.6-stable-backup
-git push --force-with-lease=refs/heads/v1.8/operator-ux-pass:a8997f6 origin v1.8/operator-ux-pass:v1.8/operator-ux-pass
+git push --force-with-lease=refs/heads/master:d7b87f55917e86de53045ab7cd032cbc071022ba origin master:master
+git push --force-with-lease=refs/heads/feature/v1.6-intelligence-layer:ed2c56cf843da1b7c6402cfc8904a77c29ac87f0 origin feature/v1.6-intelligence-layer:feature/v1.6-intelligence-layer
+git push --force-with-lease=refs/heads/feature/visual-engine-integration-audit:c10bc6867975fb6b89bba8460e73a79be4d15ab3 origin feature/visual-engine-integration-audit:feature/visual-engine-integration-audit
+git push --force-with-lease=refs/heads/release/v1.6-stable-backup:ed2c56cf843da1b7c6402cfc8904a77c29ac87f0 origin release/v1.6-stable-backup:release/v1.6-stable-backup
+git push --force-with-lease=refs/heads/v1.8/operator-ux-pass:a8997f6cabb0e784f516398fabce25c41cd5c1c1 origin v1.8/operator-ux-pass:v1.8/operator-ux-pass
 ```
-
-Then rewrite existing remote tags only after confirming the remote tag list:
 
 ```powershell
-git push --force origin refs/tags/v0.5-working-core:refs/tags/v0.5-working-core
-git push --force origin refs/tags/v0.5.1-stabilized:refs/tags/v0.5.1-stabilized
-git push --force origin refs/tags/v1.0-release-candidate:refs/tags/v1.0-release-candidate
-git push --force origin refs/tags/v1.0.0:refs/tags/v1.0.0
-git push --force origin refs/tags/v1.1-rc.1:refs/tags/v1.1-rc.1
-git push --force origin refs/tags/v1.1.0:refs/tags/v1.1.0
-git push --force origin refs/tags/v1.5.0-rc1:refs/tags/v1.5.0-rc1
-git push --force origin refs/tags/v1.5.0:refs/tags/v1.5.0
-git push --force origin refs/tags/v1.6.0:refs/tags/v1.6.0
-git push --force origin refs/tags/v1.7.0-alpha:refs/tags/v1.7.0-alpha
-git push --force origin refs/tags/v1.7.0-alpha.1:refs/tags/v1.7.0-alpha.1
+git push --force-with-lease=refs/tags/v0.5-working-core:e7f06dd11718d944467ebbc22d090beca296cdf0 origin refs/tags/v0.5-working-core:refs/tags/v0.5-working-core
+git push --force-with-lease=refs/tags/v0.5.1-stabilized:4f704e5db5037474c85ce96d738948a319691560 origin refs/tags/v0.5.1-stabilized:refs/tags/v0.5.1-stabilized
+git push --force-with-lease=refs/tags/v1.0-release-candidate:1437ca08eb685ec0be64283abe7d7f1d5dc5e4d5 origin refs/tags/v1.0-release-candidate:refs/tags/v1.0-release-candidate
+git push --force-with-lease=refs/tags/v1.0.0:f78920e04bace79c244e29bfe6cd5771265ea0c8 origin refs/tags/v1.0.0:refs/tags/v1.0.0
+git push --force-with-lease=refs/tags/v1.1-rc.1:764b39615173172a1c93d27654345ac272abbecc origin refs/tags/v1.1-rc.1:refs/tags/v1.1-rc.1
+git push --force-with-lease=refs/tags/v1.1.0:2888810313df9a176d371f0da92b59932e741855 origin refs/tags/v1.1.0:refs/tags/v1.1.0
+git push --force-with-lease=refs/tags/v1.5.0:52eb1cf46a841c9a44c3e572eac802ee9c07869d origin refs/tags/v1.5.0:refs/tags/v1.5.0
+git push --force-with-lease=refs/tags/v1.5.0-rc1:52eb1cf46a841c9a44c3e572eac802ee9c07869d origin refs/tags/v1.5.0-rc1:refs/tags/v1.5.0-rc1
+git push --force-with-lease=refs/tags/v1.6.0:9c858fc7e21d2d10203899d9def9218281fb4d90 origin refs/tags/v1.6.0:refs/tags/v1.6.0
+git push --force-with-lease=refs/tags/v1.7.0-alpha:ca855bbf76e91316525ec20c1981c82c34fae44e origin refs/tags/v1.7.0-alpha:refs/tags/v1.7.0-alpha
+git push --force-with-lease=refs/tags/v1.7.0-alpha.1:67fb74911e46d6ed07150f1713dccb76dfc30abd origin refs/tags/v1.7.0-alpha.1:refs/tags/v1.7.0-alpha.1
 ```
 
-Do not push `creator-run-v0.1-internal` unless it is confirmed to exist remotely or separately approved.
+## Remaining Approval Requirement
 
-## Owner Approval Requirement
-
-Remote force-push, remote tag rewrite, release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval after reviewing this plan and the local verification results.
+Release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval after reviewing the remote cleanup results. README and release-preparation work can resume in a separate approved cycle.

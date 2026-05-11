@@ -17,7 +17,7 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Complete approved remote database-history cleanup | Repository hygiene | All stages | GitHub branches, tags, `HISTORY_CLEANUP_PLAN.md` | Owner approves documented force-push/tag rewrite, remote history no longer exposes `dev.db`, and `v1.6.0` release archive risk is rechecked. |
+| P0 | Resume v1.7.0-alpha.2 release prep after database cleanup | Release preparation | Stage 1 | README, release notes, CI, validation, release branch | README/docs/CI are updated, local validation passes, and a pre-release PR is opened without creating a stable release. |
 | P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
@@ -46,6 +46,7 @@ Current release posture:
 
 ## Done
 
+- Force-pushed the approved rewritten remote branches and tags, verified a fresh remote clone has no database artifacts, and verified the downloaded `v1.6.0` source archive contains no database artifacts.
 - Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.
 - Added content pipeline roadmap, schema, actions, UI, backup coverage, and tests in the prior content MVP slice.
 - Added staged release documents.
