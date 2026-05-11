@@ -43,7 +43,7 @@ The roadmap now tracks two dimensions:
 - Staged release strategy and gate foundation.
 - Internal/private Creator Run v0.1 validation on a real first content run.
 - v1.8 operator UX pass and activity-event coverage.
-- GitHub Actions CI and review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR.
+- GitHub Actions CI rerun and review for PR #1, the `v1.7.0-alpha.2` pre-release prep PR, after the lockfile synchronization fix.
 
 ### Missing Before Public MVP
 
@@ -82,7 +82,7 @@ The roadmap now tracks two dimensions:
 | Order | Priority | Task | Stage | Reason |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | Keep release docs and feature audit current | Stages 0-6 | Prevents accidental scope expansion. |
-| 1a | P0 | Validate `v1.7.0-alpha.2` release-prep PR | Stage 1 | Wait for CI and review PR #1 without tagging or releasing. |
+| 1a | P0 | Validate `v1.7.0-alpha.2` release-prep PR | Stage 1 | Wait for the CI rerun and review PR #1 without tagging or releasing. |
 | 2 | P1 | Add route-level page gates | Stage 3 | Navigation gating alone is insufficient for public release. |
 | 3 | P1 | Add server-action and API gates | Stage 3 | Hidden workflows must not be callable directly. |
 | 4 | P1 | Add gate-context smoke tests | Stages 1-4 | Ensures staged release behavior does not regress. |
@@ -99,3 +99,4 @@ The roadmap now tracks two dimensions:
 - Metrics remain user-entered until imported analytics are approved.
 - Monetization values are notes until financial integrations and reporting language are reviewed.
 - Internal users may inspect future release-ready work, but public users must not see private, partner, advanced, not-ready, or not-needed features.
+- Dependency audit findings are tracked separately from this pre-release presentation pass unless they block release approval.

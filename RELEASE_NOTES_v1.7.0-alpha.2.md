@@ -49,6 +49,7 @@ Creator Run v0.1 is manual-first and local-first. It does not call external medi
 
 Validated locally in this release-prep cycle:
 
+- `npm ci` - passed after synchronizing `package-lock.json`; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this alpha prep cycle
 - `npx prisma generate` - passed
 - `npx prisma validate` - passed
 - `npx tsc --noEmit` - passed
@@ -64,6 +65,7 @@ Validated locally in this release-prep cycle:
 - The `v1.6.0` source archive was verified clean after the tag rewrite.
 - A local ignored `dev.db` may still exist for development.
 - The pre-cleanup bundle is sensitive and must remain private.
+- The initial PR CI run failed at `npm ci` due to lockfile drift; `package-lock.json` was synchronized before continuing release prep.
 
 ## Release Boundaries
 

@@ -17,7 +17,7 @@ Current release posture:
 
 | Priority | Task | Product phase | Release stage | Files or areas affected | Completion criteria |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Wait for v1.7.0-alpha.2 release PR CI | Release preparation | Stage 1 | GitHub PR #1, GitHub Actions | CI finishes on the release-prep PR before merge, tag, or release decisions. |
+| P0 | Wait for v1.7.0-alpha.2 release PR CI rerun | Release preparation | Stage 1 | GitHub PR #1, GitHub Actions, `package-lock.json` | CI reruns after the lockfile synchronization fix and finishes before merge, tag, or release decisions. |
 | P0 | Preserve rewritten local cleanup state | Engineering hygiene | All stages | Git status/diff | Current local cleanup commits remain intact and no database artifacts are reintroduced. |
 | P0 | Maintain staged release docs | Release planning | Stages 0-6 | `RELEASE_STRATEGY.md`, `PUBLIC_MVP_SCOPE.md`, `PRIVATE_BETA_PLAN.md`, `ECOSYSTEM_IMPACT.md` | Docs define goals, included/withheld features, risks, controls, and exit criteria. |
 | P0 | Maintain feature audit | Release planning | Stages 0-6 | `FEATURE_GATING.md`, `src/lib/feature-gating.ts` | Every major feature has a release classification and gate id where applicable. |
@@ -48,6 +48,7 @@ Current release posture:
 
 - Updated README positioning and added CI/release docs for the `v1.7.0-alpha.2` Creator Run pre-release candidate.
 - Ran release-prep validation successfully: Prisma generate/validate, typecheck, lint, tests, build, and unsafe tracked-file scan.
+- Synchronized `package-lock.json` after the first PR CI run failed at `npm ci`.
 - Opened release-prep PR #1 without creating a tag or GitHub release.
 - Force-pushed the approved rewritten remote branches and tags, verified a fresh remote clone has no database artifacts, and verified the downloaded `v1.6.0` source archive contains no database artifacts.
 - Rewrote local reachable Git history with `git-filter-repo` to remove `dev.db` and verified local history, local tracked files, and local `v1.6.0` tag tree no longer contain database artifacts.
@@ -71,5 +72,6 @@ Current release posture:
 ## Current Blockers
 
 - Direct `npx prisma db push` still fails with a Prisma schema-engine error. Use migrations, `npx prisma validate`, `npx prisma generate`, and guarded Playwright DB setup for validation.
+- `npm audit` reports 7 dependency findings, 5 moderate and 2 high; dependency remediation is deferred unless it blocks release approval.
 - External integrations require credentials, provider/platform policy review, and explicit approval.
 - Public deployment must not proceed until route/API/action gates match `FEATURE_GATING.md`.

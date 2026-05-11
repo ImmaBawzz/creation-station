@@ -20,9 +20,12 @@ Completed so far:
 - Added `CHANGELOG.md`.
 - Pushed `release/v1.7.0-alpha.2-creator-run`.
 - Opened PR #1: `https://github.com/ImmaBawzz/creation-station/pull/1`.
+- Investigated the first GitHub Actions failure at `npm ci`.
+- Synchronized `package-lock.json` with `npm install --package-lock-only` so clean installs include the optional Tailwind WASM dependency entries required by npm.
 
 Validation:
 
+- `npm ci`: passed after lockfile synchronization; npm reported 7 audit findings, 5 moderate and 2 high, not remediated in this release-prep cycle.
 - `npx prisma generate`: passed.
 - `npx prisma validate`: passed.
 - `npx tsc --noEmit`: passed.
@@ -30,11 +33,12 @@ Validation:
 - `npm test`: passed, 49 files and 303 tests.
 - `npm run build`: passed with known Turbopack/NFT tracing warnings from the music-video builder import trace.
 - Unsafe tracked file scan: passed, no output.
-- GitHub Actions CI: triggered and pending at report update time.
+- GitHub Actions CI: initial run failed at `npm ci` before lockfile synchronization; rerun is required after pushing the fix.
 
 Known risks and deferred work:
 
 - No tag or GitHub release should be created in this cycle.
+- GitHub Actions CI must pass on the release-prep PR before merge, tag, or release approval.
 - Route/API/server-action gate hardening and public MVP subfeature visibility remain deferred.
 - `npx prisma db push` remains excluded because of the known schema-engine issue.
 
