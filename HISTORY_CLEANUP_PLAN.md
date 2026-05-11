@@ -187,4 +187,4 @@ git push --force-with-lease=refs/tags/v1.7.0-alpha.1:67fb74911e46d6ed07150f1713d
 
 ## Remaining Approval Requirement
 
-Release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval. README, CI, release notes, validation, release branch push, and PR creation are approved in the current release-prep cycle. The current release-prep PR must pass its CI rerun after the npm 10 `package-lock.json` synchronization fix before any merge, tag, or release decision.
+Release deletion, release recreation, and `v1.7.0-alpha.2` release creation remain blocked until the owner gives explicit approval. README, CI, release notes, validation, release branch push, and PR creation are approved in the current release-prep cycle. The current release-prep PR must pass its CI rerun after the npm 10 `package-lock.json` synchronization and route context type fixes before any merge, tag, or release decision.

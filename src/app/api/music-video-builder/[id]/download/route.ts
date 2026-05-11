@@ -13,6 +13,10 @@ const fileNames: Record<string, string> = {
   workflow: "workflow.json",
 };
 
+type DownloadRouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 function parseReleaseDirectory(result: string): string {
   const parsed = JSON.parse(result) as { releasePackageDir?: unknown };
   return typeof parsed.releasePackageDir === "string" ? parsed.releasePackageDir : "";
@@ -36,7 +40,7 @@ function contentTypeFor(file: string): string {
 
 export async function GET(
   request: NextRequest,
-  context: RouteContext<"/api/music-video-builder/[id]/download">,
+  context: DownloadRouteContext,
 ) {
   const { id } = await context.params;
   const fileKey = new URL(request.url).searchParams.get("file") ?? "";

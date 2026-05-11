@@ -7,9 +7,13 @@ type RenderRouteError = Error & {
   statusCode?: number;
 };
 
+type RenderRouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 export async function POST(
   _request: Request,
-  context: RouteContext<"/api/visual-engine/projects/[id]/render">,
+  context: RenderRouteContext,
 ) {
   const { id } = await context.params;
 

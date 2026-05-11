@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 
 import { validateVisualProjectById } from "@/modules/visual-engine/validate";
 
+type ValidateRouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 export async function GET(
   _request: Request,
-  context: RouteContext<"/api/visual-engine/projects/[id]/validate">,
+  context: ValidateRouteContext,
 ) {
   const { id } = await context.params;
   const result = await validateVisualProjectById(id);

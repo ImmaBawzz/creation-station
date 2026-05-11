@@ -23,7 +23,7 @@ No `v1.7.0-alpha.2` tag, stable `v1.7.0` release, PR merge, or GitHub release ha
 - Unsafe tracked file scan: passed, no output.
 - Branch push: completed.
 - Pull request: `https://github.com/ImmaBawzz/creation-station/pull/1`
-- GitHub Actions CI: the first two runs failed at `npm ci` because `package-lock.json` was missing optional Tailwind WASM dependency entries for the CI npm version; `package-lock.json` was regenerated with `npx npm@10.8.2 install --package-lock-only` and a rerun is required after that fix is pushed.
+- GitHub Actions CI: the first two runs failed at `npm ci` because `package-lock.json` was missing optional Tailwind WASM dependency entries for the CI npm version; the next run reached `npx tsc --noEmit` and failed because three API routes depended on generated Next route context globals before `next build`; `package-lock.json` and the route context types have been fixed and a rerun is required after this push.
 
 ## Local History Cleanup Results
 
@@ -153,6 +153,9 @@ Database inspection was limited to table names and row counts. No row contents w
 - `ROADMAP.md`
 - `IMPLEMENTATION_LOG.md`
 - `package-lock.json`
+- `src/app/api/music-video-builder/[id]/download/route.ts`
+- `src/app/api/visual-engine/projects/[id]/render/route.ts`
+- `src/app/api/visual-engine/projects/[id]/validate/route.ts`
 - `dev.db` removed from Git tracking and local history; local file preserved on disk and ignored
 
 ## Commits Created
@@ -195,19 +198,20 @@ Release-prep validation status:
 - `npx tsc --noEmit` - passed
 - `npm run lint` - passed with 16 existing warnings
 - `npm test` - passed, 49 files and 303 tests
-- `npm run build` - passed with 1 known Turbopack/NFT tracing warning from the music-video builder import trace
+- `npm run build` - passed with 2 known Turbopack/NFT tracing warnings from the music-video builder import trace
 - Unsafe tracked file scan - passed, no output
 - GitHub Actions CI runs `25695318602` and `25695743347` - failed at `npm ci` before the npm 10 lockfile synchronization fix
+- GitHub Actions CI run `25696047710` - failed at `npx tsc --noEmit` before explicit route context types were added
 
 ## Blockers
 
-- P0: PR is open; CI must be rechecked after the npm 10 lockfile synchronization fix before any merge, new tag, or GitHub pre-release decision.
+- P0: PR is open; CI must be rechecked after the npm 10 lockfile synchronization and route context type fixes before any merge, new tag, or GitHub pre-release decision.
 - P1: Route-level, API-level, and server-action feature gate enforcement remains deferred before public MVP release.
 - P1: Public monetization controls still need stricter visibility handling.
 
 ## Remediation Plan
 
-1. Push the npm 10 lockfile synchronization fix and wait for GitHub Actions CI to rerun on PR #1.
+1. Push the route context type fix and wait for GitHub Actions CI to rerun on PR #1.
 2. Review the PR.
 3. Do not merge, tag, or publish until separately approved.
 
@@ -257,4 +261,4 @@ P2:
 
 ## Next Smallest Safe Step
 
-Push the npm 10 lockfile synchronization fix, wait for GitHub Actions CI to rerun on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.
+Push the route context type fix, wait for GitHub Actions CI to rerun on PR #1, then review the release-prep PR. Do not create the tag or GitHub release in this cycle.

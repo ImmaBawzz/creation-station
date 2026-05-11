@@ -16,6 +16,7 @@ This is not a full public platform release. It is an alpha focused on validating
 - Added production task creation from content workflow.
 - Added Markdown export for Production Packets.
 - Completed repository history cleanup for the tracked `dev.db` blocker.
+- Fixed clean-checkout CI validation by synchronizing the lockfile for npm 10 and making dynamic API route context types explicit.
 
 ## Creator Run v0.1 Flow
 
@@ -55,7 +56,7 @@ Validated locally in this release-prep cycle:
 - `npx tsc --noEmit` - passed
 - `npm run lint` - passed with 16 existing warnings
 - `npm test` - passed, 49 files and 303 tests
-- `npm run build` - passed with 1 known Turbopack/NFT tracing warning from the music-video builder import trace
+- `npm run build` - passed with 2 known Turbopack/NFT tracing warnings from the music-video builder import trace
 - Unsafe tracked file scan - passed, no output
 
 ## Repository Hygiene
@@ -66,6 +67,7 @@ Validated locally in this release-prep cycle:
 - A local ignored `dev.db` may still exist for development.
 - The pre-cleanup bundle is sensitive and must remain private.
 - The initial PR CI runs failed at `npm ci` due to lockfile drift under the CI npm version; `package-lock.json` was synchronized with `npx npm@10.8.2 install --package-lock-only` before continuing release prep.
+- A later PR CI run failed at `npx tsc --noEmit` because clean checkouts do not have generated Next route context globals before build; the affected API routes now define explicit local context types.
 
 ## Release Boundaries
 
