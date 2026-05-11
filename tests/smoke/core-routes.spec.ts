@@ -21,6 +21,9 @@ test.describe("core route smoke", () => {
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: "Command Overview" })).toBeVisible();
 
+    await page.goto("/content");
+    await expect(page.getByRole("heading", { name: "Content Pipeline MVP" })).toBeVisible();
+
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "AI Provider Controls" })).toBeVisible();
 
@@ -39,6 +42,12 @@ test.describe("core route smoke", () => {
     expect(payload).toHaveProperty("factoryPlans");
     expect(payload).toHaveProperty("tasks");
     expect(payload).toHaveProperty("taskBlockers");
+    expect(payload).toHaveProperty("contentItems");
+    expect(payload).toHaveProperty("contentBriefs");
+    expect(payload).toHaveProperty("contentDrafts");
+    expect(payload).toHaveProperty("publishingTargets");
+    expect(payload).toHaveProperty("contentMetrics");
+    expect(payload).toHaveProperty("monetizationLinks");
     expect(payload).toHaveProperty("settings");
   });
 });

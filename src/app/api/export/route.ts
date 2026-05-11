@@ -6,6 +6,7 @@ export async function GET() {
   const backup = await buildWorkspaceBackup();
 
   await logAnalyticsEvent("backup_exported", {
+    contentItems: backup.contentItems.length,
     ideas: backup.ideas.length,
     projects: backup.projects.length,
     tasks: backup.tasks.length,
@@ -15,6 +16,7 @@ export async function GET() {
     entityType: "workspace",
     eventType: "backup_exported",
     metadata: {
+      contentItems: backup.contentItems.length,
       ideas: backup.ideas.length,
       projects: backup.projects.length,
       tasks: backup.tasks.length,

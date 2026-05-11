@@ -37,6 +37,59 @@ enum Potential {
   MASSIVE
 }
 
+enum ContentStatus {
+  IDEA
+  BRIEFED
+  DRAFTING
+  EDITING
+  READY_TO_PUBLISH
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ContentFormat {
+  SHORT_VIDEO
+  LONG_VIDEO
+  ARTICLE
+  NEWSLETTER
+  SOCIAL_POST
+  THREAD
+  PODCAST
+  EMAIL
+  OTHER
+}
+
+enum PublishingPlatform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  X
+  BLOG
+  NEWSLETTER
+  LINKEDIN
+  FACEBOOK
+  OTHER
+}
+
+enum ContentDraftStatus {
+  DRAFT
+  NEEDS_EDIT
+  READY
+  ARCHIVED
+}
+
+enum MonetizationMethod {
+  AFFILIATE
+  SPONSORSHIP
+  PRODUCT
+  SERVICE
+  LEAD_MAGNET
+  AD_REVENUE
+  DONATION
+  OTHER
+}
+
 model Idea {
   id        String        @id @default(cuid())
   title     String
@@ -252,4 +305,114 @@ model TaskBlocker {
 
   @@unique([taskId, blockerTaskId])
   @@index([blockerTaskId])
+}
+
+model ContentItem {
+  id                 String              @id @default(cuid())
+  title              String
+  coreIdea           String
+  audience           String              @default("")
+  format             ContentFormat       @default(SHORT_VIDEO)
+  primaryPlatform    PublishingPlatform  @default(YOUTUBE)
+  status             ContentStatus       @default(IDEA)
+  tags               String              @default("")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  brief              ContentBrief?
+  drafts             ContentDraft[]
+  publishingTargets  PublishingTarget[]
+  metrics            ContentMetric[]
+  monetizationLinks  MonetizationLink[]
+
+  @@index([status])
+  @@index([primaryPlatform])
+  @@index([createdAt])
+}
+
+model ContentBrief {
+  id            String      @id @default(cuid())
+  contentItemId String      @unique
+  objective     String      @default("")
+  angle         String      @default("")
+  promise       String      @default("")
+  outline       String      @default("")
+  cta           String      @default("")
+  keywords      String      @default("")
+  notes         String      @default("")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+model ContentDraft {
+  id            String             @id @default(cuid())
+  contentItemId String
+  title         String
+  body          String
+  version       Int                @default(1)
+  status        ContentDraftStatus @default(DRAFT)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  contentItem   ContentItem        @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+  @@index([status])
+}
+
+model PublishingTarget {
+  id            String             @id @default(cuid())
+  contentItemId String
+  platform      PublishingPlatform
+  caption       String             @default("")
+  hashtags      String             @default("")
+  checklist     String             @default("")
+  status        String             @default("PREP")
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  publishUrl    String             @default("")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  contentItem   ContentItem        @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+  @@index([platform])
+  @@index([status])
+}
+
+model ContentMetric {
+  id            String      @id @default(cuid())
+  contentItemId String
+  platform      PublishingPlatform
+  views         Int         @default(0)
+  likes         Int         @default(0)
+  comments      Int         @default(0)
+  shares        Int         @default(0)
+  saves         Int         @default(0)
+  clicks        Int         @default(0)
+  notes         String      @default("")
+  capturedAt    DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+  @@index([platform])
+  @@index([capturedAt])
+}
+
+model MonetizationLink {
+  id                  String             @id @default(cuid())
+  contentItemId       String
+  method              MonetizationMethod
+  offerName           String             @default("")
+  offerUrl            String             @default("")
+  expectedValueCents  Int                @default(0)
+  actualRevenueCents  Int                @default(0)
+  currency            String             @default("USD")
+  notes               String             @default("")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  contentItem         ContentItem        @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+  @@index([method])
 }

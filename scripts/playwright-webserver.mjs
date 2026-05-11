@@ -1,8 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
-function resolveSqliteFilePath(databaseUrl) {
+function resolvePlaywrightSqliteDatabase(databaseUrl) {
   if (!databaseUrl.startsWith("file:")) {
     return null;
   }
@@ -13,21 +13,36 @@ function resolveSqliteFilePath(databaseUrl) {
     return null;
   }
 
-  if (localPath.startsWith("./") || localPath.startsWith("../")) {
-    return resolve(process.cwd(), localPath);
+  const normalizedPath = localPath.startsWith("./")
+    ? localPath.slice(2)
+    : localPath;
+
+  if (
+    isAbsolute(normalizedPath) ||
+    normalizedPath.includes("/") ||
+    normalizedPath.includes("\\") ||
+    normalizedPath.includes("..") ||
+    !/^playwright\.e2e\.[A-Za-z0-9_-]+\.db$/.test(normalizedPath)
+  ) {
+    throw new Error(
+      "Playwright smoke DATABASE_URL must be a workspace-local file:./playwright.e2e.<id>.db SQLite URL.",
+    );
   }
 
-  return resolve(localPath);
+  return {
+    fileName: normalizedPath,
+    filePath: resolve(process.cwd(), normalizedPath),
+  };
 }
 
 const databaseUrl =
   process.env.DATABASE_URL ?? `file:./playwright.e2e.${Date.now()}.db`;
 process.env.DATABASE_URL = databaseUrl;
-const databaseFilePath = resolveSqliteFilePath(databaseUrl);
-const npxExecutable =
+const databaseFile = resolvePlaywrightSqliteDatabase(databaseUrl);
+const nodeExecutable =
   process.platform === "win32"
-    ? '"C:\\Program Files\\nodejs\\npx.cmd"'
-    : "npx";
+    ? '"C:\\Program Files\\nodejs\\node.exe"'
+    : "node";
 const npmExecutable =
   process.platform === "win32"
     ? '"C:\\Program Files\\nodejs\\npm.cmd"'
@@ -42,19 +57,23 @@ function log(message) {
   appendFileSync(logFilePath, `[${new Date().toISOString()}] ${message}\n`);
 }
 
-log(`bootstrap start; DATABASE_URL=${databaseUrl}; PORT=${process.env.PORT ?? "3100"}`);
+log(
+  `bootstrap start; DATABASE_FILE=${databaseFile?.fileName ?? "unavailable"}; PORT=${
+    process.env.PORT ?? "3100"
+  }`,
+);
 
-if (databaseFilePath) {
-  rmSync(databaseFilePath, { force: true });
-  rmSync(`${databaseFilePath}-shm`, { force: true });
-  rmSync(`${databaseFilePath}-wal`, { force: true });
-  log(`removed sqlite files for ${databaseFilePath}`);
+if (databaseFile) {
+  rmSync(databaseFile.filePath, { force: true });
+  rmSync(`${databaseFile.filePath}-shm`, { force: true });
+  rmSync(`${databaseFile.filePath}-wal`, { force: true });
+  log(`removed sqlite files for ${databaseFile.fileName}`);
 }
 
 const port = process.env.PORT ?? "3100";
 
-const prismaCommand = `${npxExecutable} prisma db push`;
-log(`running prisma command: ${prismaCommand}`);
+const prismaCommand = `${nodeExecutable} scripts/prepare-playwright-db.mjs`;
+log(`running database setup command: ${prismaCommand}`);
 
 const prismaResult = spawnSync(prismaCommand, {
   cwd: process.cwd(),
@@ -63,7 +82,7 @@ const prismaResult = spawnSync(prismaCommand, {
   stdio: "inherit",
 });
 
-log(`prisma exit code: ${prismaResult.status ?? "null"}`);
+log(`database setup exit code: ${prismaResult.status ?? "null"}`);
 
 if (prismaResult.status !== 0) {
   process.exit(prismaResult.status ?? 1);

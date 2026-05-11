@@ -542,6 +542,19 @@ export async function updateTaskStatus(formData: FormData) {
     });
   }
 
+  if (statusChange) {
+    await logActivity({
+      entityId: taskId,
+      entityType: "task",
+      eventType: "task_status_changed",
+      metadata: {
+        nextStatus,
+        previousStatus: statusChange.previousStatus,
+        projectId: statusChange.projectId,
+      },
+    });
+  }
+
   revalidatePath("/");
 }
 

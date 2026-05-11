@@ -16,6 +16,8 @@ const {
   mockRedirect,
   mockRevalidatePath,
   mockTaskCreate,
+  mockTaskFindUnique,
+  mockTaskUpdate,
 } = vi.hoisted(() => ({
   mockCookies: vi.fn(async () => ({
     get: vi.fn(() => undefined),
@@ -36,6 +38,8 @@ const {
   }),
   mockRevalidatePath: vi.fn(),
   mockTaskCreate: vi.fn(),
+  mockTaskFindUnique: vi.fn(),
+  mockTaskUpdate: vi.fn(),
 }));
 
 vi.mock("@/lib/aiProvider", () => ({
@@ -81,7 +85,13 @@ vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
 }));
 
-import { approvePlan, createIdea, requestRevision, sendToFactory } from "@/app/actions";
+import {
+  approvePlan,
+  createIdea,
+  requestRevision,
+  sendToFactory,
+  updateTaskStatus,
+} from "@/app/actions";
 
 describe("sendToFactory", () => {
   beforeEach(() => {
@@ -100,6 +110,8 @@ describe("sendToFactory", () => {
     mockRedirect.mockClear();
     mockRevalidatePath.mockClear();
     mockTaskCreate.mockReset();
+    mockTaskFindUnique.mockReset();
+    mockTaskUpdate.mockReset();
   });
 
   it("logs activity when an idea is created", async () => {
@@ -367,6 +379,62 @@ describe("sendToFactory", () => {
       },
     });
   });
+
+  it("logs activity when a task status changes", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      planId: "plan-1",
+      status: "TODO",
+    });
+    mockTaskUpdate.mockResolvedValue({});
+    mockLogActivity.mockResolvedValue(undefined);
+    mockDbTransaction.mockImplementation(async (callback: (tx: typeof dbMockTx) => Promise<unknown>) =>
+      callback(dbMockTx),
+    );
+
+    const formData = new FormData();
+    formData.set("taskId", "task-1");
+    formData.set("nextStatus", "BLOCKED");
+
+    await updateTaskStatus(formData);
+
+    expect(mockTaskUpdate).toHaveBeenCalledWith({
+      data: { status: "BLOCKED" },
+      where: { id: "task-1" },
+    });
+    expect(mockLogActivity).toHaveBeenCalledWith({
+      entityId: "task-1",
+      entityType: "task",
+      eventType: "task_status_changed",
+      metadata: {
+        nextStatus: "BLOCKED",
+        previousStatus: "TODO",
+        projectId: "plan-1",
+      },
+    });
+    expect(mockLogAnalyticsEvent).not.toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("does not log activity when a task status does not change", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      planId: "plan-1",
+      status: "TODO",
+    });
+    mockDbTransaction.mockImplementation(async (callback: (tx: typeof dbMockTx) => Promise<unknown>) =>
+      callback(dbMockTx),
+    );
+
+    const formData = new FormData();
+    formData.set("taskId", "task-1");
+    formData.set("nextStatus", "TODO");
+
+    await updateTaskStatus(formData);
+
+    expect(mockTaskUpdate).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
+    expect(mockLogAnalyticsEvent).not.toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+  });
 });
 
 const dbMockTx = {
@@ -379,5 +447,7 @@ const dbMockTx = {
   },
   task: {
     create: mockTaskCreate,
+    findUnique: mockTaskFindUnique,
+    update: mockTaskUpdate,
   },
 };

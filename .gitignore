@@ -48,6 +48,7 @@ next-env.d.ts
 /input/
 /output/
 /.debug/
+/.codex/.codex/
 /.vscode/tasks.json
 /visual-workspace/projects/*/renders/final.mp4
 /visual-workspace/projects/*/renders/*.mp4
@@ -77,6 +78,7 @@ playwright-e2e.db
 playwright.e2e.*.db
 playwright.e2e.*.db-shm
 playwright.e2e.*.db-wal
+playwright.preparetest.db
 playwright-webserver.log
 playwright-e2e-server.log
 /test-results/
